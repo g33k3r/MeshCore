@@ -2,6 +2,25 @@
 
 MeshCore is a lightweight, portable C++ library that enables multi-hop packet routing for embedded projects using LoRa and other packet radios. It is designed for developers who want to create resilient, decentralized communication networks that work without the internet.
 
+## 🔧 This Fork (g33k3r)
+
+Private improvements over upstream — none upstreamed, all CI-gated (unit + characterization tests + valgrind memory-safety gate on every push).
+
+### Routing quality (the big one)
+- **Path-quality selection** — return paths compete on a measured metric: bottleneck SNR (weakest-link) dominates, hops penalized ~1 dB each. Replaces first-/last-arrival path wins in the repeater and room server.
+- **Measured, not guessed** — completed client traceroutes (TRACE) are correlated with stored paths to record each route's real bottleneck SNR; direct-neighbor paths are measured at receipt. RF state is transient by design (never persisted).
+- **Multi-path learning** — duplicate floods arriving via different routes donate their route as a path candidate (packet hash covers payload only, so a second route is provably new). Adverts (signed pubkey) and addressed messages (unique hash match) both feed promotion. Zero extra mesh traffic.
+
+### Frequency support
+- Repeat-mode whitelist accepts **910.250 MHz** (FCC 15.247(a)(2)-aligned community setting, issue #945) and **927.875 MHz** (SoCal alternative, issue #1798); documented in the FAQ.
+
+### Test infrastructure
+- **Virtual-mesh harness** (`test/test_routing_core/`) — first simulation harness in the project's history: real `Mesh` cores wired through a virtual radio, no hardware. 16 characterization tests pin flood/direct/ACK/TRACE/group/anon/multipart/transport-code/zero-hop behavior byte-exact.
+- **Valgrind CI gate** — uninitialized-memory reads fail the build (the exact bug class empty crypto mocks exposed).
+
+### Design docs
+- `docs/path-quality.md` — the routing-quality arc + the dual-path reply v2 wire spec.
+
 ## 🔍 What is MeshCore?
 
 MeshCore now supports a range of LoRa devices, allowing for easy flashing without the need to compile firmware manually. Users can flash a pre-built binary using tools like Adafruit ESPTool and interact with the network through a serial console.
