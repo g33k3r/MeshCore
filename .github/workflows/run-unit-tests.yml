@@ -27,7 +27,7 @@ jobs:
         # cannot — exactly the class of bug where empty mock bodies made
         # "decryption" read stack garbage that happened to compare equal.
         run: |
-          sudo apt-get install -y -qq valgrind
+          sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
           valgrind --error-exitcode=42 --leak-check=no -q             .pio/build/native_routing/program
 
       - name: Upload Test Results
