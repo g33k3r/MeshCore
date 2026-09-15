@@ -96,12 +96,10 @@ TEST_F(RoutingCore, DirectDatagramToNeighborDeliversZeroHop) {
   run({a.get(), b.get()});
 
   EXPECT_EQ(b->mesh.peer_msgs, 1);
-  // DELIVERY characterized; content differs from the multi-hop case:
-  // zero-path direct delivers a 16-byte payload that does NOT contain the
-  // plaintext under the no-op cipher mocks (observed: 16 00*7 80 7a b5 f0 92 59 00 00).
-  // TODO: investigate zero-path direct payload transform (mock-crypto artifact
-  // vs. real routing behavior) — tracked separately.
-  EXPECT_GT(b->mesh.last_peer_data.size(), 0u);
+  // Deterministic mocks: decrypted payload = message, zero-padded to the
+  // 16-byte cipher block (identity AES). Verified byte-exact.
+  ASSERT_EQ(b->mesh.last_peer_data.size(), ((sizeof(msg) + 15) / 16) * 16);
+  EXPECT_EQ(memcmp(b->mesh.last_peer_data.data(), msg, sizeof(msg)), 0);
 }
 
 TEST_F(RoutingCore, DirectDatagramRoutesThroughForwarder) {
@@ -124,13 +122,10 @@ TEST_F(RoutingCore, DirectDatagramRoutesThroughForwarder) {
   EXPECT_EQ(b->mesh.getNumSentDirect(), 1u);
   // C receives the datagram addressed to it
   EXPECT_EQ(c->mesh.peer_msgs, 1);
-  // Content check is run-dependent under the no-op crypto mocks: mock
-  // AES/SHA carry cross-test state, so plaintext bytes appear in some runs
-  // and transformed bytes in others (observed 16B payloads both ways).
-  // Routing delivery + forwarding counts ARE deterministic — asserted above.
-  // TODO(zero-path-content): isolate mock-crypto state per test, then pin
-  // the message-content assertion for both direct-datagram tests.
-  EXPECT_GT(c->mesh.last_peer_data.size(), 0u);
+  // Deterministic mocks: decrypted payload = message, zero-padded to the
+  // 16-byte cipher block (identity AES). Verified byte-exact.
+  ASSERT_EQ(c->mesh.last_peer_data.size(), ((sizeof(msg) + 15) / 16) * 16);
+  EXPECT_EQ(memcmp(c->mesh.last_peer_data.data(), msg, sizeof(msg)), 0);
 }
 
 // ── ACK routing ────────────────────────────────────────────────

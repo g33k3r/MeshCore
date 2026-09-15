@@ -30,6 +30,20 @@ public:
     }
   }
 
-  void resetHMAC(const uint8_t* key, size_t keyLen) {}
-  void finalizeHMAC(const uint8_t* key, size_t keyLen, uint8_t* hash, size_t hashLen) {}
+  // Deterministic HMAC stand-in: same (key, data) => same MAC on both sides.
+  void resetHMAC(const uint8_t* key, size_t keyLen) {
+    memset(_state, 0, sizeof(_state));
+    _len = 0;
+    update(key, keyLen);  // fold key in first (inner-pad-ish)
+  }
+  void finalizeHMAC(const uint8_t* key, size_t keyLen, uint8_t* hash, size_t hashLen) {
+    // Fold key again (outer-pad-ish) over a copy, then emit — deterministic
+    // and symmetric for identical (key, accumulated-data) inputs.
+    uint8_t tmp[32];
+    memcpy(tmp, _state, sizeof(tmp));
+    SHA256 outer;
+    outer.update(key, keyLen);
+    outer.update(tmp, sizeof(tmp));
+    outer.finalize(hash, hashLen);
+  }
 };
