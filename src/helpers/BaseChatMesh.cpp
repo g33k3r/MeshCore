@@ -108,6 +108,7 @@ void BaseChatMesh::populateContactFromAdvert(ContactInfo& ci, const mesh::Identi
   ci.id = id;
   ci.out_path_len = OUT_PATH_UNKNOWN;
   ci.alt_path_len = OUT_PATH_UNKNOWN;   // transient, always starts unset
+  ci.path_snr4 = mesh::PATH_SNR_UNKNOWN;
   StrHelper::strncpy(ci.name, parser.getName(), sizeof(ci.name));
   ci.type = parser.getType();
   if (parser.hasLatLon()) {
@@ -314,6 +315,29 @@ void BaseChatMesh::onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender
   }
 }
 
+// A completed TRACE carrying per-hop SNRs: when its path (reversed) matches a
+// contact's out_path, that route's real bottleneck is now known.
+void BaseChatMesh::onTraceRecv(mesh::Packet*, uint32_t, uint32_t, uint8_t flags,
+                               const uint8_t* path_snrs, const uint8_t* path_hashes, uint8_t path_len) {
+  uint8_t trace_sz = 1 << (flags & 0x03);
+  for (int i = 0; i < num_contacts; i++) {
+    ContactInfo& c = contacts[i];
+    if (c.out_path_len == OUT_PATH_UNKNOWN) continue;
+    uint8_t stored_sz = ((c.out_path_len >> 6) & 3) + 1;
+    uint8_t stored_count = c.out_path_len & 63;
+    if (stored_sz != trace_sz || stored_count != path_len) continue;
+    bool match = true;
+    for (uint8_t k = 0; k < path_len && match; k++) {
+      if (memcmp(&c.out_path[k * stored_sz],
+                 &path_hashes[(path_len - 1 - k) * trace_sz], stored_sz) != 0) match = false;
+    }
+    if (match) {
+      c.path_snr4 = (int16_t)mesh::traceBottleneckSnr4(path_snrs, path_len);
+      return;
+    }
+  }
+}
+
 bool BaseChatMesh::onPeerPathRecv(mesh::Packet* packet, int sender_idx, const uint8_t* secret, uint8_t* path, uint8_t path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) {
   int i = matching_peer_indexes[sender_idx];
   if (i < 0 || i >= num_contacts) {
@@ -322,6 +346,11 @@ bool BaseChatMesh::onPeerPathRecv(mesh::Packet* packet, int sender_idx, const ui
   }
 
   ContactInfo& from = contacts[i];
+
+  // direct-neighbor routes (no forwarders) are fully measured by this hop
+  if ((path_len & 63) == 0) {
+    from.path_snr4 = (int16_t)(packet->getSNR() * 4.0f);
+  }
 
   return onContactPathRecv(from, packet->path, packet->path_len, path, path_len, extra_type, extra, extra_len);
 }

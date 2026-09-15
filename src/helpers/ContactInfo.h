@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Mesh.h>
+#include <helpers/RoutingPolicy.h>
 
 #define OUT_PATH_UNKNOWN   0xFF
 
@@ -21,6 +22,7 @@ struct ContactInfo {
   // Transient (NOT persisted by DataStore — field-by-field serialization):
   uint8_t alt_path_len;                 // secondary route to this contact (OUT_PATH_UNKNOWN = none)
   uint8_t alt_path[MAX_PATH_SIZE];
+  int16_t path_snr4;                    // measured bottleneck SNR*4 of out_path (mesh::PATH_SNR_UNKNOWN = unmeasured)
 
   const uint8_t* getSharedSecret(const mesh::LocalIdentity& self_id) const {
     if (!shared_secret_valid) {
