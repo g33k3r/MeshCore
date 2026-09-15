@@ -61,3 +61,17 @@ No firmware we ship can brick the board — the USB bootloader lives in silicon.
 
 Binaries land in `.pio/build/<env>/firmware.bin` (+ boot_app0/partitions for ESP32).
 Keep the `.bin` from each env you flash — flashing back is `esptool` with the same files.
+
+## No-toolchain flash (prebuilt binaries)
+
+Binaries staged at `artifacts/heltec-v4-companion-ble/` (bootloader.bin,
+partitions.bin, boot_app0.bin, firmware.bin). On any machine with Python:
+
+```bash
+pip install esptool
+esptool.py --chip esp32s3 --baud 921600 --port /dev/ttyACM0 write_flash \
+  0x0 bootloader.bin 0x8000 partitions.bin 0xe000 boot_app0.bin 0x10000 firmware.bin
+```
+
+(Windows: port `COMx`. If 921600 is unstable use 115200. BOOT+RESET for
+download mode if it won't connect.)
