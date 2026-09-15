@@ -178,3 +178,106 @@ int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+
+// ── Group channel routing ──────────────────────────────────────
+
+TEST_F(RoutingCore, GroupDatagramFloodDeliversToChannelMembers) {
+  a->connect(*b);
+  b->mesh.known_channel = true;
+  memset(a->mesh.channel.hash, 0x99, PATH_HASH_SIZE);
+  memset(a->mesh.channel.secret, 0x77, PUB_KEY_SIZE);
+  b->mesh.channel = a->mesh.channel;
+
+  const uint8_t msg[] = "group hello";
+  auto* pkt = a->mesh.createGroupDatagram(PAYLOAD_TYPE_GRP_TXT, a->mesh.channel,
+                                          msg, sizeof(msg));
+  ASSERT_NE(pkt, nullptr);
+  a->mesh.sendFlood(pkt, 0u);
+  run({a.get(), b.get()});
+
+  EXPECT_EQ(b->mesh.group_msgs, 1);
+  // identity cipher: content present, block-padded
+  ASSERT_GE(b->mesh.last_group_data.size(), sizeof(msg));
+  EXPECT_EQ(memcmp(b->mesh.last_group_data.data(), msg, sizeof(msg)), 0);
+}
+
+// ── Anonymous datagrams ────────────────────────────────────────
+
+TEST_F(RoutingCore, AnonDatagramDeliversAndStopsAtRecipient) {
+  a->connect(*b);
+  b->connect(*c);
+
+  const uint8_t msg[] = "anon ping";
+  uint8_t anon_secret[PUB_KEY_SIZE] = {0};   // mock calcSharedSecret is constant-zero
+  auto* pkt = a->mesh.createAnonDatagram(PAYLOAD_TYPE_ANON_REQ, a->mesh.self_id,
+                                         b->mesh.self_id, anon_secret,
+                                         msg, sizeof(msg));
+  ASSERT_NE(pkt, nullptr);
+  a->mesh.sendFlood(pkt, 0u);
+  run({a.get(), b.get(), c.get()});
+
+  // delivered to the addressed recipient
+  EXPECT_EQ(b->mesh.anon_msgs, 1);
+  ASSERT_GE(b->mesh.last_anon_data.size(), sizeof(msg));
+  EXPECT_EQ(memcmp(b->mesh.last_anon_data.data(), msg, sizeof(msg)), 0);
+  // successful anon decrypt marks do-not-retransmit: recipient does not forward
+  EXPECT_EQ(b->radio.sent, 0u);
+}
+
+// ── Multipart ACK relay ────────────────────────────────────────
+
+TEST_F(RoutingCore, MultipartAckRelayedThroughForwarder) {
+  a->connect(*b);
+
+  auto* pkt = a->mesh.createMultiAck((uint32_t)0xCAFEBABEu, 2);
+  ASSERT_NE(pkt, nullptr);
+  uint8_t path[1];
+  b->mesh.self_id.copyHashTo(path, 1);
+  a->mesh.sendDirect(pkt, path, 1, 0);
+  run({a.get(), b.get()});
+
+  // B relayed the embedded ACK (zero-hop rebroadcast back to A)
+  EXPECT_GE(b->mesh.getNumSentDirect(), 1u);
+  EXPECT_EQ(a->mesh.acks, 1);
+  EXPECT_EQ(a->mesh.last_ack_crc, 0xCAFEBABEu);
+}
+
+// ── Transport-coded flood ──────────────────────────────────────
+
+TEST_F(RoutingCore, TransportCodedFloodForwardsWithCodesIntact) {
+  a->connect(*b);
+  b->connect(*c);
+
+  auto* pkt = a->mesh.createAdvert(a->mesh.self_id);
+  ASSERT_NE(pkt, nullptr);
+  uint16_t codes[2] = {0x1234, 0x5678};
+  a->mesh.sendFlood(pkt, codes, 0u);
+  run({a.get(), b.get(), c.get()});
+
+  EXPECT_EQ(c->mesh.adverts, 1);   // propagated through B
+  // B's rebroadcast preserves the transport codes in the frame
+  ASSERT_FALSE(b->radio.last_tx.empty());
+  uint8_t hdr = b->radio.last_tx[0];
+  EXPECT_EQ(hdr & PH_ROUTE_MASK, ROUTE_TYPE_TRANSPORT_FLOOD);
+  uint16_t c0 = (uint16_t)b->radio.last_tx[1] | ((uint16_t)b->radio.last_tx[2] << 8);
+  uint16_t c1 = (uint16_t)b->radio.last_tx[3] | ((uint16_t)b->radio.last_tx[4] << 8);
+  EXPECT_EQ(c0, 0x1234);
+  EXPECT_EQ(c1, 0x5678);
+}
+
+// ── Zero-hop scope ─────────────────────────────────────────────
+
+TEST_F(RoutingCore, ZeroHopSendReachesNeighborsOnly) {
+  a->connect(*b);
+  b->connect(*c);
+
+  auto* pkt = a->mesh.createAdvert(a->mesh.self_id);
+  ASSERT_NE(pkt, nullptr);
+  a->mesh.sendZeroHop(pkt, 0u);
+  run({a.get(), b.get(), c.get()});
+
+  EXPECT_EQ(b->mesh.adverts, 1);   // neighbor receives...
+  EXPECT_EQ(b->radio.sent, 0u);    // ...and never retransmits
+  EXPECT_EQ(c->mesh.adverts, 0);   // ...so nothing propagates further
+}

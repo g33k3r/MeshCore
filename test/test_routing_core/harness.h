@@ -20,6 +20,7 @@ struct VirtualRadio : public mesh::Radio {
   float rssi = -95.0f;
   size_t sent = 0;
   bool drop_next = false;   // test hook: swallow next transmission into the void
+  std::vector<uint8_t> last_tx;   // raw frame of the most recent transmission
 
   int recvRaw(uint8_t* bytes, int sz) override {
     if (rxQ.empty()) return 0;
@@ -33,6 +34,7 @@ struct VirtualRadio : public mesh::Radio {
   bool startSendRaw(const uint8_t* bytes, int len) override {
     if (drop_next) { drop_next = false; return true; }
     sent++;
+    last_tx.assign(bytes, bytes + len);
     for (auto* peer : peers) {
       peer->rxQ.emplace_back(bytes, bytes + len);
     }
@@ -74,8 +76,13 @@ public:
   uint8_t shared_secret[PUB_KEY_SIZE] = {0};
 
   int adverts = 0, acks = 0, traces = 0, peer_msgs = 0, control = 0, raw = 0;
+  int group_msgs = 0, anon_msgs = 0;
   uint32_t last_ack_crc = 0;
   std::vector<uint8_t> last_peer_data;
+  std::vector<uint8_t> last_group_data;
+  std::vector<uint8_t> last_anon_data;
+  bool known_channel = false;
+  mesh::GroupChannel channel{};
 
   TestMesh(VirtualRadio& r, TestClock& c, mesh::RNG& g, mesh::RTCClock& rtc,
            mesh::PacketManager& m, mesh::MeshTables& t)
@@ -97,6 +104,21 @@ public:
   void onRawDataRecv(mesh::Packet*) override { raw++; }
 
   int searchPeersByHash(const uint8_t*) override { return known_peer ? 1 : 0; }
+  int searchChannelsByHash(const uint8_t*, mesh::GroupChannel channels[], int) override {
+    if (!known_channel) return 0;
+    channels[0] = channel;
+    return 1;
+  }
+  void onGroupDataRecv(mesh::Packet*, uint8_t, const mesh::GroupChannel&,
+                       uint8_t* data, size_t len) override {
+    group_msgs++;
+    last_group_data.assign(data, data + len);
+  }
+  void onAnonDataRecv(mesh::Packet*, const uint8_t*, const mesh::Identity&,
+                      uint8_t* data, size_t len) override {
+    anon_msgs++;
+    last_anon_data.assign(data, data + len);
+  }
   void getPeerSharedSecret(uint8_t* dest_secret, int) override {
     memcpy(dest_secret, shared_secret, PUB_KEY_SIZE);
   }
