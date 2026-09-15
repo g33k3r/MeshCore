@@ -1078,7 +1078,9 @@ static FreqRange repeat_freq_ranges[] = {
   #else
   { 433000, 433000 },
   { 869495, 869495 },
-  { 918000, 918000 }
+  { 910250, 910250 },   // USA Regulatory (issue #945): 910.25 MHz DTS, BW500
+  { 918000, 918000 },
+  { 927875, 927875 }    // USA SoCal (issue #1798): 927.875 MHz alternative
   #endif
 };
 
