@@ -508,6 +508,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#no-toolchain-flash-prebuilt-binaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No-toolchain flash (prebuilt binaries)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -873,6 +884,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#no-toolchain-flash-prebuilt-binaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No-toolchain flash (prebuilt binaries)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -966,6 +988,15 @@ No firmware we ship can brick the board — the USB bootloader lives in silicon.
 <h2 id="build-artifacts">Build artifacts</h2>
 <p>Binaries land in <code>.pio/build/&lt;env&gt;/firmware.bin</code> (+ boot_app0/partitions for ESP32).
 Keep the <code>.bin</code> from each env you flash — flashing back is <code>esptool</code> with the same files.</p>
+<h2 id="no-toolchain-flash-prebuilt-binaries">No-toolchain flash (prebuilt binaries)</h2>
+<p>Binaries staged at <code>artifacts/heltec-v4-companion-ble/</code> (bootloader.bin,
+partitions.bin, boot_app0.bin, firmware.bin). On any machine with Python:</p>
+<pre><code class="language-bash">pip install esptool
+esptool.py --chip esp32s3 --baud 921600 --port /dev/ttyACM0 write_flash \
+  0x0 bootloader.bin 0x8000 partitions.bin 0xe000 boot_app0.bin 0x10000 firmware.bin
+</code></pre>
+<p>(Windows: port <code>COMx</code>. If 921600 is unstable use 115200. BOOT+RESET for
+download mode if it won't connect.)</p>
 
 
 
