@@ -459,8 +459,14 @@ int  BaseChatMesh::sendMessage(const ContactInfo& recipient, uint32_t timestamp,
     txt_send_timeout = futureMillis(est_timeout = calcFloodTimeoutMillisFor(t));
     rc = MSG_SEND_SENT_FLOOD;
   } else {
-    sendDirect(pkt, recipient.out_path, recipient.out_path_len);
-    txt_send_timeout = futureMillis(est_timeout = calcDirectTimeoutMillisFor(t, recipient.out_path_len));
+    // v3 route diversity: retries rotate to the banked alternate path —
+    // a retry via a different route beats repeating the same dead one
+    bool use_alt = (attempt > 0) && ((attempt & 1) == 0)
+                   && (recipient.alt_path_len != OUT_PATH_UNKNOWN);
+    const uint8_t* send_path = use_alt ? recipient.alt_path : recipient.out_path;
+    uint8_t send_path_len = use_alt ? recipient.alt_path_len : recipient.out_path_len;
+    sendDirect(pkt, send_path, send_path_len);
+    txt_send_timeout = futureMillis(est_timeout = calcDirectTimeoutMillisFor(t, send_path_len));
     rc = MSG_SEND_SENT_DIRECT;
   }
   return rc;
@@ -485,8 +491,14 @@ int  BaseChatMesh::sendCommandData(const ContactInfo& recipient, uint32_t timest
     txt_send_timeout = futureMillis(est_timeout = calcFloodTimeoutMillisFor(t));
     rc = MSG_SEND_SENT_FLOOD;
   } else {
-    sendDirect(pkt, recipient.out_path, recipient.out_path_len);
-    txt_send_timeout = futureMillis(est_timeout = calcDirectTimeoutMillisFor(t, recipient.out_path_len));
+    // v3 route diversity: retries rotate to the banked alternate path —
+    // a retry via a different route beats repeating the same dead one
+    bool use_alt = (attempt > 0) && ((attempt & 1) == 0)
+                   && (recipient.alt_path_len != OUT_PATH_UNKNOWN);
+    const uint8_t* send_path = use_alt ? recipient.alt_path : recipient.out_path;
+    uint8_t send_path_len = use_alt ? recipient.alt_path_len : recipient.out_path_len;
+    sendDirect(pkt, send_path, send_path_len);
+    txt_send_timeout = futureMillis(est_timeout = calcDirectTimeoutMillisFor(t, send_path_len));
     rc = MSG_SEND_SENT_DIRECT;
   }
   return rc;
