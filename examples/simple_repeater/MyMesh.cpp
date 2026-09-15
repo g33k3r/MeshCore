@@ -775,15 +775,7 @@ bool MyMesh::onPeerPathRecv(mesh::Packet *packet, int sender_idx, const uint8_t 
     // store a copy of path, for sendDirect() — but keep the better candidate:
     // quality = measured bottleneck SNR where known, else fewest hops.
     // A direct-neighbor path (no forwarders) is fully measured by its final hop.
-    client->last_snr4 = (int8_t)(packet->getSNR() * 4.0f);
-    uint8_t new_count = path_len & 63;
-    int new_snr4 = (new_count == 0) ? (int)client->last_snr4 : mesh::PATH_SNR_UNKNOWN;
-    if (client->out_path_len == OUT_PATH_UNKNOWN
-        || mesh::shouldReplacePath(new_count, new_snr4,
-                                   client->out_path_len & 63, client->path_snr4)) {
-      client->out_path_len = mesh::Packet::copyPath(client->out_path, path, path_len);
-      client->path_snr4 = new_snr4;
-    }
+    considerClientPath(client, path_len, path, packet->getSNR());
     client->last_activity = getRTCClock()->getCurrentTime();
   } else {
     MESH_DEBUG_PRINTLN("onPeerPathRecv: invalid peer idx: %d", i);
@@ -791,6 +783,32 @@ bool MyMesh::onPeerPathRecv(mesh::Packet *packet, int sender_idx, const uint8_t 
 
   // NOTE: no reciprocal path send!!
   return false;
+}
+
+// Shared keep-or-replace decision for a candidate out_path (from PATH packets,
+// alternate-route duplicates, etc). Direct-neighbor paths are fully measured by
+// their final hop; longer candidates stay unmeasured until a TRACE correlates.
+void MyMesh::considerClientPath(ClientInfo* client, uint8_t path_len, const uint8_t* path, float rx_snr) {
+  client->last_snr4 = (int8_t)(rx_snr * 4.0f);
+  uint8_t new_count = path_len & 63;
+  int new_snr4 = (new_count == 0) ? (int)client->last_snr4 : mesh::PATH_SNR_UNKNOWN;
+  if (client->out_path_len == OUT_PATH_UNKNOWN
+      || mesh::shouldReplacePath(new_count, new_snr4,
+                                 client->out_path_len & 63, client->path_snr4)) {
+    client->out_path_len = mesh::Packet::copyPath(client->out_path, path, path_len);
+    client->path_snr4 = new_snr4;
+  }
+}
+
+// A duplicate flood arriving via a different route is a free path candidate.
+// v1: adverts only — their signed pubkey fully identifies the sender.
+void MyMesh::onAlternatePathRecv(mesh::Packet* packet, const uint8_t* path, uint8_t path_len) {
+  if (packet->getPayloadType() != PAYLOAD_TYPE_ADVERT) return;
+  if (packet->payload_len < PUB_KEY_SIZE) return;
+  mesh::Identity id(packet->payload);
+  ClientInfo* client = acl.getClient(id.pub_key, PUB_KEY_SIZE);
+  if (client == NULL) return;   // only track known clients
+  considerClientPath(client, path_len, path, packet->getSNR());
 }
 
 // A completed TRACE carries per-hop SNRs for the path it traveled. If that path

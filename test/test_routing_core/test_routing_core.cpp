@@ -281,3 +281,25 @@ TEST_F(RoutingCore, ZeroHopSendReachesNeighborsOnly) {
   EXPECT_EQ(b->radio.sent, 0u);    // ...and never retransmits
   EXPECT_EQ(c->mesh.adverts, 0);   // ...so nothing propagates further
 }
+
+
+// ── Alternate-path learning ────────────────────────────────────
+
+TEST_F(RoutingCore, DuplicateFloodViaDifferentRouteYieldsAltPath) {
+  // Diamond topology: A reaches B directly AND via C
+  a->connect(*b);
+  a->connect(*c);
+  c->connect(*b);
+
+  auto* pkt = a->mesh.createAdvert(a->mesh.self_id);
+  ASSERT_NE(pkt, nullptr);
+  a->mesh.sendFlood(pkt, 0u);
+  run({a.get(), b.get(), c.get()});
+
+  // B received the advert once (direct copy wins delivery)...
+  EXPECT_EQ(b->mesh.adverts, 1);
+  // ...and C's forwarded duplicate fired the alternate-path hook with C's route
+  EXPECT_EQ(b->mesh.alt_paths, 1);
+  ASSERT_EQ(b->mesh.last_alt_path_len, 1u);
+  EXPECT_EQ(b->mesh.last_alt_path[0], 0xCC);  // C's hash prefix
+}

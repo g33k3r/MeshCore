@@ -262,6 +262,9 @@ DispatcherAction Mesh::onRecvPacket(Packet* pkt) {
         MESH_DEBUG_PRINTLN("%s Mesh::onRecvPacket(): incomplete advertisement packet", getLogDateTime());
       } else if (self_id.matches(id.pub_key)) {
         MESH_DEBUG_PRINTLN("%s Mesh::onRecvPacket(): receiving SELF advert packet", getLogDateTime());
+      } else if (_tables->wasSeen(pkt) && pkt->isRouteFlood()) {
+        // duplicate advert via another route: the route itself is new information
+        onAlternatePathRecv(pkt, pkt->path, pkt->path_len);
       } else if (!_tables->wasSeen(pkt)) {
         _tables->markSeen(pkt);
         uint8_t* app_data = &pkt->payload[i];

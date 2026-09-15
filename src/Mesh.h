@@ -116,6 +116,14 @@ protected:
   virtual bool onPeerPathRecv(Packet* packet, int sender_idx, const uint8_t* secret, uint8_t* path, uint8_t path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) { return false; }
 
   /**
+   * \brief  A duplicate flood arrived via a DIFFERENT route than the first copy.
+   *         The alternate route is a free path candidate for direct replies.
+   *         NOTE: only fired for flood packets whose payload was already seen;
+   *         'path'/'path_len' describe the route THIS copy traveled (raw, as received).
+   */
+  virtual void onAlternatePathRecv(Packet* packet, const uint8_t* path, uint8_t path_len) { }
+
+  /**
    * \brief  A new incoming Advertisement has been received.
    *         NOTE: these can be received multiple times (per id/timestamp), via different routes
   */

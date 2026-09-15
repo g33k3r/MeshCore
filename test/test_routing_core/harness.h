@@ -76,7 +76,9 @@ public:
   uint8_t shared_secret[PUB_KEY_SIZE] = {0};
 
   int adverts = 0, acks = 0, traces = 0, peer_msgs = 0, control = 0, raw = 0;
-  int group_msgs = 0, anon_msgs = 0;
+  int group_msgs = 0, anon_msgs = 0, alt_paths = 0;
+  uint8_t last_alt_path[MAX_PATH_SIZE] = {0};
+  uint8_t last_alt_path_len = 0;
   uint32_t last_ack_crc = 0;
   std::vector<uint8_t> last_peer_data;
   std::vector<uint8_t> last_group_data;
@@ -118,6 +120,14 @@ public:
                       uint8_t* data, size_t len) override {
     anon_msgs++;
     last_anon_data.assign(data, data + len);
+  }
+  void onAlternatePathRecv(mesh::Packet*, const uint8_t* path, uint8_t path_len) override {
+    alt_paths++;
+    last_alt_path_len = path_len;
+    if (path_len > 0 && path != nullptr) {
+      memset(last_alt_path, 0, sizeof(last_alt_path));
+      memcpy(last_alt_path, path, path_len < MAX_PATH_SIZE ? path_len : MAX_PATH_SIZE);
+    }
   }
   void getPeerSharedSecret(uint8_t* dest_secret, int) override {
     memcpy(dest_secret, shared_secret, PUB_KEY_SIZE);
