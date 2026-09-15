@@ -84,3 +84,11 @@ TEST(PacketFuzz, MaxSizeFrameRoundTrips) {
   EXPECT_EQ(q.payload_len, 100);
   EXPECT_EQ(q.transport_codes[0], 0x1234);
 }
+
+TEST(PacketFuzz, Regression_TruncatedTransportFrameRejectedNotOverread) {
+  // Found by the seeded fuzzer + valgrind gate: a 2-byte frame with a
+  // transport-coded header used to memcpy 4 code bytes past the buffer.
+  const uint8_t tiny[] = { (uint8_t)(ROUTE_TYPE_TRANSPORT_FLOOD | (PAYLOAD_TYPE_ADVERT << PH_TYPE_SHIFT)), 0x00 };
+  Packet p;
+  EXPECT_FALSE(p.readFrom(tiny, 2));   // rejected, no OOB read (valgrind-gated)
+}
