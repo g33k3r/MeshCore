@@ -108,3 +108,44 @@ int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
+
+// ── Path quality ───────────────────────────────────────────────
+
+TEST(PathQuality, FewerHopsWinsWhenSnrUnmeasured) {
+    // PATH packets carry no SNR: pure hop-count comparison (deterministic
+    // replacement for first-/last-arrival-wins)
+    EXPECT_TRUE(shouldReplacePath(2, PATH_SNR_UNKNOWN, 3, PATH_SNR_UNKNOWN));
+    EXPECT_FALSE(shouldReplacePath(4, PATH_SNR_UNKNOWN, 3, PATH_SNR_UNKNOWN));
+    EXPECT_FALSE(shouldReplacePath(3, PATH_SNR_UNKNOWN, 3, PATH_SNR_UNKNOWN));  // tie keeps stored
+}
+
+TEST(PathQuality, StrongerBottleneckSnrWins) {
+    // 3 hops @ +2.5dB bottleneck (snr4=10) vs 1 hop @ -3dB (snr4=-12):
+    // 10*25-300 = -50  >  -12*25-100 = -400
+    EXPECT_TRUE(shouldReplacePath(3, 10, 1, -12));
+    EXPECT_FALSE(shouldReplacePath(1, -12, 3, 10));
+}
+
+TEST(PathQuality, HopPenaltyRequiresMeaningfulSnrGain) {
+    // 2 hops @ 0dB vs 3 hops @ 0dB: extra hop NOT justified by equal SNR
+    EXPECT_FALSE(shouldReplacePath(3, 0, 2, 0));
+    // ...but 3 hops gaining ~1.25dB at the bottleneck IS justified (5 units * 25 = 125 > 100)
+    EXPECT_TRUE(shouldReplacePath(3, 5, 2, 0));
+}
+
+TEST(PathQuality, MixedMeasurementDegradesToHops) {
+    // one side measured, one not: fall back to hop comparison, SNR ignored
+    EXPECT_TRUE(shouldReplacePath(1, -80, 2, PATH_SNR_UNKNOWN));
+    EXPECT_FALSE(shouldReplacePath(2, 100, 1, PATH_SNR_UNKNOWN));
+}
+
+TEST(PathQuality, ReplaceIfEqualTieBreak) {
+    EXPECT_TRUE(shouldReplacePath(3, 10, 3, 10, true));
+    EXPECT_FALSE(shouldReplacePath(3, 10, 3, 10, false));
+}
+
+TEST(PathQuality, ScoreIsMonotonicInBottleneck) {
+    EXPECT_GT(pathQualityScore(2, 20), pathQualityScore(2, 19));
+    EXPECT_GT(pathQualityScore(1, 0), pathQualityScore(2, 0));
+}
