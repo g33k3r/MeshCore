@@ -20,7 +20,14 @@ jobs:
         uses: ./.github/actions/setup-build-environment
 
       - name: Run Unit Tests
-        run: pio test -e native -e native_kiss_modem -vv
+        run: pio test -e native -e native_kiss_modem -e native_routing -vv
+
+      - name: Memory-Safety Check (routing suite)
+        # Valgrind catches uninitialized-memory reads that unit assertions
+        # cannot — exactly the class of bug where empty mock bodies made
+        # "decryption" read stack garbage that happened to compare equal.
+        run: |
+          valgrind --error-exitcode=42 --leak-check=no -q             .pio/build/native_routing/program
 
       - name: Upload Test Results
         # Upload test results even if the test step failed.
@@ -28,4 +35,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: .pio/build/native/
+          path: |
+            .pio/build/native/
+            .pio/build/native_routing/
