@@ -772,8 +772,13 @@ bool MyMesh::onPeerPathRecv(mesh::Packet *packet, int sender_idx, const uint8_t 
     MESH_DEBUG_PRINTLN("PATH to client, path_len=%d", (uint32_t)path_len);
     auto client = acl.getClientByIdx(i);
 
-    // store a copy of path, for sendDirect()
-    client->out_path_len = mesh::Packet::copyPath(client->out_path, path, path_len);
+    // store a copy of path, for sendDirect() — but keep the better candidate:
+    // prefer fewer hops until SNR measurements are available (TRACE enrichment)
+    if (client->out_path_len == OUT_PATH_UNKNOWN
+        || mesh::shouldReplacePath(path_len & 63, mesh::PATH_SNR_UNKNOWN,
+                                   client->out_path_len & 63, mesh::PATH_SNR_UNKNOWN)) {
+      client->out_path_len = mesh::Packet::copyPath(client->out_path, path, path_len);
+    }
     client->last_activity = getRTCClock()->getCurrentTime();
   } else {
     MESH_DEBUG_PRINTLN("onPeerPathRecv: invalid peer idx: %d", i);

@@ -44,6 +44,46 @@ inline ReplyRoute chooseReplyRoute(bool inbound_is_flood, bool have_supplied_pat
 }
 
 /**
+ * \brief  Sentinel for "no SNR measurement available" in path-quality scoring.
+ */
+static const int PATH_SNR_UNKNOWN = -1000;
+
+/**
+ * \brief  Quality score for a return-path candidate: stronger bottleneck SNR
+ *         wins (a chain is as reliable as its weakest link), extra hops are
+ *         penalized (airtime + failure points per hop).
+ * \param  hops              number of forwarder entries in the path
+ * \param  bottleneck_snr4   weakest per-hop SNR in SNR*4 units (as recorded by
+ *                          TRACE), or PATH_SNR_UNKNOWN when unmeasured
+ * \returns  higher is better. Scale: 1 SNR*4 unit (0.25 dB) = 25 points,
+ *          1 hop = 100 points — a path must be ~1 dB stronger at the
+ *          bottleneck to justify one extra hop.
+ */
+inline int pathQualityScore(uint8_t hops, int bottleneck_snr4) {
+  if (bottleneck_snr4 == PATH_SNR_UNKNOWN) return -((int)hops) * 100;
+  return bottleneck_snr4 * 25 - ((int)hops) * 100;
+}
+
+/**
+ * \brief  Decide whether a newly offered return path should replace the stored one.
+ *         Unmeasured SNR on either side degrades to pure hop-count comparison
+ *         (the previous first-/last-arrival behavior, minus the randomness).
+ * \param  replace_if_equal  tie-break policy (default: keep stored — stability)
+ */
+inline bool shouldReplacePath(uint8_t new_hops, int new_snr4,
+                              uint8_t stored_hops, int stored_snr4,
+                              bool replace_if_equal = false) {
+  int a, b;
+  if (new_snr4 == PATH_SNR_UNKNOWN || stored_snr4 == PATH_SNR_UNKNOWN) {
+    a = -((int)new_hops); b = -((int)stored_hops);
+  } else {
+    a = pathQualityScore(new_hops, new_snr4);
+    b = pathQualityScore(stored_hops, stored_snr4);
+  }
+  return replace_if_equal ? (a >= b) : (a > b);
+}
+
+/**
  * \brief  Which transport scope a flooded reply should be sent with.
  */
 enum ReplyScope : uint8_t {
