@@ -773,11 +773,16 @@ bool MyMesh::onPeerPathRecv(mesh::Packet *packet, int sender_idx, const uint8_t 
     auto client = acl.getClientByIdx(i);
 
     // store a copy of path, for sendDirect() — but keep the better candidate:
-    // prefer fewer hops until SNR measurements are available (TRACE enrichment)
+    // quality = measured bottleneck SNR where known, else fewest hops.
+    // A direct-neighbor path (no forwarders) is fully measured by its final hop.
+    client->last_snr4 = (int8_t)(packet->getSNR() * 4.0f);
+    uint8_t new_count = path_len & 63;
+    int new_snr4 = (new_count == 0) ? (int)client->last_snr4 : mesh::PATH_SNR_UNKNOWN;
     if (client->out_path_len == OUT_PATH_UNKNOWN
-        || mesh::shouldReplacePath(path_len & 63, mesh::PATH_SNR_UNKNOWN,
-                                   client->out_path_len & 63, mesh::PATH_SNR_UNKNOWN)) {
+        || mesh::shouldReplacePath(new_count, new_snr4,
+                                   client->out_path_len & 63, client->path_snr4)) {
       client->out_path_len = mesh::Packet::copyPath(client->out_path, path, path_len);
+      client->path_snr4 = new_snr4;
     }
     client->last_activity = getRTCClock()->getCurrentTime();
   } else {
@@ -786,6 +791,31 @@ bool MyMesh::onPeerPathRecv(mesh::Packet *packet, int sender_idx, const uint8_t 
 
   // NOTE: no reciprocal path send!!
   return false;
+}
+
+// A completed TRACE carries per-hop SNRs for the path it traveled. If that path
+// (reversed) matches a client's stored out_path, we now KNOW that route's
+// bottleneck quality — feed it to path selection.
+void MyMesh::onTraceRecv(mesh::Packet* packet, uint32_t tag, uint32_t auth_code, uint8_t flags,
+                         const uint8_t* path_snrs, const uint8_t* path_hashes, uint8_t path_len) {
+  uint8_t trace_sz = 1 << (flags & 0x03);
+  for (int i = 0; i < acl.getNumClients(); i++) {
+    auto* client = acl.getClientByIdx(i);
+    if (client->out_path_len == OUT_PATH_UNKNOWN) continue;
+    uint8_t stored_sz = ((client->out_path_len >> 6) & 3) + 1;
+    uint8_t stored_count = client->out_path_len & 63;
+    if (stored_sz != trace_sz || stored_count != path_len) continue;
+    bool match = true;
+    for (uint8_t k = 0; k < path_len && match; k++) {
+      if (memcmp(&client->out_path[k * stored_sz],
+                 &path_hashes[(path_len - 1 - k) * trace_sz], stored_sz) != 0) match = false;
+    }
+    if (match) {
+      client->path_snr4 = mesh::traceBottleneckSnr4(path_snrs, path_len);
+      MESH_DEBUG_PRINTLN("TRACE correlated: client %d path bottleneck SNR*4 = %d", i, client->path_snr4);
+      break;
+    }
+  }
 }
 
 #define CTL_TYPE_NODE_DISCOVER_REQ   0x80

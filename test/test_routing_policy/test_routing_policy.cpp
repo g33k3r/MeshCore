@@ -149,3 +149,34 @@ TEST(PathQuality, ScoreIsMonotonicInBottleneck) {
     EXPECT_GT(pathQualityScore(2, 20), pathQualityScore(2, 19));
     EXPECT_GT(pathQualityScore(1, 0), pathQualityScore(2, 0));
 }
+
+
+// ── Trace bottleneck extraction ────────────────────────────────
+
+TEST(TraceBottleneck, EmptyOrNullIsUnknown) {
+    EXPECT_EQ(PATH_SNR_UNKNOWN, traceBottleneckSnr4(NULL, 0));
+    EXPECT_EQ(PATH_SNR_UNKNOWN, traceBottleneckSnr4(NULL, 5));
+    const uint8_t none[] = {1, 2};
+    EXPECT_EQ(PATH_SNR_UNKNOWN, traceBottleneckSnr4(none, 0));
+}
+
+TEST(TraceBottleneck, SingleHopIsItsOwnBottleneck) {
+    const uint8_t snrs[] = { 40 };   // +10dB in SNR*4 units
+    EXPECT_EQ(40, traceBottleneckSnr4(snrs, 1));
+}
+
+TEST(TraceBottleneck, MinimumDominatesIncludingNegatives) {
+    const uint8_t snrs[] = { 40, (uint8_t)-24, 12 };  // -6dB is the weak link
+    EXPECT_EQ(-24, traceBottleneckSnr4(snrs, 3));
+}
+
+TEST(TraceBottleneck, FeedsPathQualityDecisions) {
+    // measured trace: 3 hops, bottleneck -6dB (snr4=-24)
+    const uint8_t snrs[] = { 8, (uint8_t)-24, 16 };
+    int measured = traceBottleneckSnr4(snrs, 3);
+    // documented fallback: any unmeasured side degrades to hops-only —
+    // a shorter unmeasured candidate displaces (airtime determinism)...
+    EXPECT_TRUE(shouldReplacePath(2, PATH_SNR_UNKNOWN, 3, measured));
+    // ...but at equal hops the measured path is retained (stability tie-break)
+    EXPECT_FALSE(shouldReplacePath(2, PATH_SNR_UNKNOWN, 2, measured));
+}

@@ -84,6 +84,22 @@ inline bool shouldReplacePath(uint8_t new_hops, int new_snr4,
 }
 
 /**
+ * \brief  Bottleneck (minimum) per-hop SNR from a completed TRACE's recordings.
+ * \param  path_snrs  per-hop SNR*4 bytes, as appended by each forwarder
+ * \param  path_len   number of recorded hops
+ * \returns  the weakest hop's SNR*4, or PATH_SNR_UNKNOWN when nothing recorded
+ */
+inline int traceBottleneckSnr4(const uint8_t* path_snrs, uint8_t path_len) {
+  if (path_snrs == NULL || path_len == 0) return PATH_SNR_UNKNOWN;
+  int bottleneck = 127;
+  for (uint8_t i = 0; i < path_len; i++) {
+    int v = (int)(int8_t)path_snrs[i];
+    if (v < bottleneck) bottleneck = v;
+  }
+  return bottleneck;
+}
+
+/**
  * \brief  Which transport scope a flooded reply should be sent with.
  */
 enum ReplyScope : uint8_t {
