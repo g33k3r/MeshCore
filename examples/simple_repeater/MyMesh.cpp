@@ -604,6 +604,17 @@ void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const m
       mesh::Packet* path = createPathReturn(sender, secret, packet->path, packet->path_len,
                                             PAYLOAD_TYPE_RESPONSE, reply_data, reply_len);
       if (path) sendFloodReply(path, SERVER_RESPONSE_DELAY, packet->getPathHashSize());
+      // dual-path: share the alternate route too (old receivers ignore the extra)
+      if (client != NULL && client->alt_out_path_len != OUT_PATH_UNKNOWN) {
+        uint8_t alt_extra[1 + MAX_PATH_SIZE];
+        uint8_t alt_bytes = (client->alt_out_path_len & 63)
+                          * ((((client->alt_out_path_len >> 6) & 3) + 1));
+        alt_extra[0] = client->alt_out_path_len;
+        memcpy(&alt_extra[1], client->alt_out_path, alt_bytes);
+        mesh::Packet* alt = createPathReturn(sender, secret, packet->path, packet->path_len,
+                                             PATH_EXTRA_TYPE_ALT_PATH, alt_extra, 1 + alt_bytes);
+        if (alt) sendFloodReply(alt, SERVER_RESPONSE_DELAY + 100, packet->getPathHashSize());
+      }
       return;
     }
 
@@ -792,11 +803,31 @@ void MyMesh::considerClientPath(ClientInfo* client, uint8_t path_len, const uint
   client->last_snr4 = (int8_t)(rx_snr * 4.0f);
   uint8_t new_count = path_len & 63;
   int new_snr4 = (new_count == 0) ? (int)client->last_snr4 : mesh::PATH_SNR_UNKNOWN;
+
+  // identical to the current primary? nothing to learn
+  if (client->out_path_len != OUT_PATH_UNKNOWN && client->out_path_len == path_len
+      && memcmp(client->out_path, path, new_count * ((((path_len >> 6) & 3) + 1))) == 0) return;
+
   if (client->out_path_len == OUT_PATH_UNKNOWN
       || mesh::shouldReplacePath(new_count, new_snr4,
                                  client->out_path_len & 63, client->path_snr4)) {
+    // demote the current primary to alternate (if it beats the existing alt)
+    if (client->out_path_len != OUT_PATH_UNKNOWN
+        && (client->alt_out_path_len == OUT_PATH_UNKNOWN
+            || mesh::shouldReplacePath(client->out_path_len & 63, client->path_snr4,
+                                       client->alt_out_path_len & 63, client->alt_path_snr4))) {
+      memcpy(client->alt_out_path, client->out_path, MAX_PATH_SIZE);
+      client->alt_out_path_len = client->out_path_len;
+      client->alt_path_snr4 = client->path_snr4;
+    }
     client->out_path_len = mesh::Packet::copyPath(client->out_path, path, path_len);
     client->path_snr4 = new_snr4;
+  } else if (client->alt_out_path_len == OUT_PATH_UNKNOWN
+             || mesh::shouldReplacePath(new_count, new_snr4,
+                                        client->alt_out_path_len & 63, client->alt_path_snr4)) {
+    // not primary material, but candidate for the alternate slot
+    client->alt_out_path_len = mesh::Packet::copyPath(client->alt_out_path, path, path_len);
+    client->alt_path_snr4 = new_snr4;
   }
 }
 

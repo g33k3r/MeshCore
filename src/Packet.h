@@ -31,6 +31,9 @@ namespace mesh {
 //...
 #define PAYLOAD_TYPE_RAW_CUSTOM   0x0F    // custom packet as raw bytes, for applications with custom encryption, payloads, etc
 
+// extra_type markers for PATH packets (lower 4 bits survive parsing; 0x0C/0x0D are the only free values)
+#define PATH_EXTRA_TYPE_ALT_PATH  0x0C    // extra = [alt_path_len (encoded)][alt path hash bytes] — secondary route to the same destination
+
 #define PAYLOAD_VER_1       0x00   // 1-byte src/dest hashes, 2-byte MAC
 #define PAYLOAD_VER_2       0x01   // FUTURE (eg. 2-byte hashes, 4-byte MAC ??)
 #define PAYLOAD_VER_3       0x02   // FUTURE

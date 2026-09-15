@@ -326,3 +326,32 @@ TEST_F(RoutingCore, DuplicateMessageFloodYieldsAltPath) {
   ASSERT_EQ(b->mesh.last_alt_path_len, 1u);
   EXPECT_EQ(b->mesh.last_alt_path[0], 0xCC);
 }
+
+
+TEST_F(RoutingCore, DualPathReplyExtraSurvivesTheWire) {
+  a->connect(*b);
+  b->mesh.known_peer = true;
+  a->mesh.known_peer = true;
+  memset(b->mesh.shared_secret, 0x5A, PUB_KEY_SIZE);
+  memset(a->mesh.shared_secret, 0x5A, PUB_KEY_SIZE);
+
+  // B replies to A with a primary path + alt-path extra (as the repeater now does)
+  uint8_t primary_path[1] = {0xCC};          // "via C"
+  uint8_t alt_extra[2] = {0x01, 0xDD};       // encoded path_len (count=1,size=1) + alt hash byte
+  mesh::Packet* pkt = b->mesh.createPathReturn(a->mesh.self_id, b->mesh.shared_secret,
+                                               primary_path, 1, PATH_EXTRA_TYPE_ALT_PATH,
+                                               alt_extra, sizeof(alt_extra));
+  ASSERT_NE(pkt, nullptr);
+  b->mesh.sendFlood(pkt, 0u);
+  run({a.get(), b.get()});
+
+  // A received the PATH packet with the alt extra intact through the full
+  // encrypt/decrypt round-trip
+  EXPECT_EQ(a->mesh.path_pkts, 1);
+  EXPECT_EQ(a->mesh.alt_extras, 1);
+  // Wire quirk (characterized): extra_len includes cipher-block zero padding —
+  // readers parse their own length fields and ignore the tail.
+  ASSERT_GE(a->mesh.last_path_extra.size(), 2u);
+  EXPECT_EQ(a->mesh.last_path_extra[0], 0x01);   // encoded alt path_len
+  EXPECT_EQ(a->mesh.last_path_extra[1], 0xDD);   // the alt forwarder hash
+}

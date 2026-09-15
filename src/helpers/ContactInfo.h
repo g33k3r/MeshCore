@@ -18,6 +18,10 @@ struct ContactInfo {
   int32_t gps_lat, gps_lon;    // 6 dec places
   uint32_t sync_since;
 
+  // Transient (NOT persisted by DataStore — field-by-field serialization):
+  uint8_t alt_path_len;                 // secondary route to this contact (OUT_PATH_UNKNOWN = none)
+  uint8_t alt_path[MAX_PATH_SIZE];
+
   const uint8_t* getSharedSecret(const mesh::LocalIdentity& self_id) const {
     if (!shared_secret_valid) {
       self_id.calcSharedSecret(shared_secret, id.pub_key);

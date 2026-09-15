@@ -121,6 +121,18 @@ public:
     anon_msgs++;
     last_anon_data.assign(data, data + len);
   }
+  int path_pkts = 0, alt_extras = 0;
+  uint8_t last_path_extra_type = 0;
+  std::vector<uint8_t> last_path_extra;
+  bool onPeerPathRecv(mesh::Packet*, int, const uint8_t*, uint8_t* path, uint8_t path_len,
+                      uint8_t extra_type, uint8_t* extra, uint8_t extra_len) override {
+    path_pkts++;
+    last_path_extra_type = extra_type;
+    const uint8_t* base = extra ? extra : (const uint8_t*)"";
+    last_path_extra.assign(base, base + (extra ? extra_len : 0));
+    if (extra_type == PATH_EXTRA_TYPE_ALT_PATH) alt_extras++;
+    return false;
+  }
   void onAlternatePathRecv(mesh::Packet*, const uint8_t* path, uint8_t path_len) override {
     alt_paths++;
     last_alt_path_len = path_len;

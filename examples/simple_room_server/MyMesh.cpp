@@ -397,6 +397,7 @@ void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const m
       mesh::Packet *path = createPathReturn(sender, client->shared_secret, packet->path, packet->path_len,
                                             PAYLOAD_TYPE_RESPONSE, reply_data, 13);
       if (path) sendFloodReply(path, SERVER_RESPONSE_DELAY, packet->getPathHashSize());
+      sendAltPathReply(client, secret, packet);   // dual-path: secondary route (old receivers ignore it)
     } else {
       mesh::Packet *reply = createDatagram(PAYLOAD_TYPE_RESPONSE, sender, client->shared_secret, reply_data, 13);
       if (reply) {
@@ -582,6 +583,7 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
             mesh::Packet *path = createPathReturn(client->id, secret, packet->path, packet->path_len,
                                                   PAYLOAD_TYPE_RESPONSE, reply_data, reply_len);
             if (path) sendFloodReply(path, SERVER_RESPONSE_DELAY, packet->getPathHashSize());
+            sendAltPathReply(client, secret, packet);   // dual-path: secondary route
           } else {
             mesh::Packet *reply = createDatagram(PAYLOAD_TYPE_RESPONSE, client->id, secret, reply_data, reply_len);
             if (reply) {
@@ -596,6 +598,19 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
       }
     }
   }
+}
+
+// Dual-path reply: send a second PATH packet carrying the alternate route in
+// its extra field (PATH_EXTRA_TYPE_ALT_PATH). Old receivers ignore the extra.
+void MyMesh::sendAltPathReply(ClientInfo* client, const uint8_t* secret, mesh::Packet* packet) {
+  if (client == NULL || client->alt_out_path_len == OUT_PATH_UNKNOWN) return;
+  uint8_t alt_extra[1 + MAX_PATH_SIZE];
+  uint8_t alt_bytes = (client->alt_out_path_len & 63) * ((((client->alt_out_path_len >> 6) & 3) + 1));
+  alt_extra[0] = client->alt_out_path_len;
+  memcpy(&alt_extra[1], client->alt_out_path, alt_bytes);
+  mesh::Packet* alt = createPathReturn(client->id, secret, packet->path, packet->path_len,
+                                       PATH_EXTRA_TYPE_ALT_PATH, alt_extra, 1 + alt_bytes);
+  if (alt) sendFloodReply(alt, SERVER_RESPONSE_DELAY + 100, packet->getPathHashSize());
 }
 
 // Shared keep-or-replace decision for a candidate out_path (from PATH packets,

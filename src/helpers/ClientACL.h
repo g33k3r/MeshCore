@@ -34,6 +34,9 @@ struct ClientInfo {
   // Transient RF-quality state (NOT persisted by save()/load() — conditions change):
   int16_t path_snr4;   // measured bottleneck SNR*4 of out_path (mesh::PATH_SNR_UNKNOWN = unmeasured)
   int8_t  last_snr4;   // SNR*4 of the most recent reception from this client (final hop)
+  uint8_t alt_out_path_len;             // secondary route to client (OUT_PATH_UNKNOWN = none)
+  uint8_t alt_out_path[MAX_PATH_SIZE];
+  int16_t alt_path_snr4;                // measured bottleneck SNR*4 of alt_out_path
   
   bool isAdmin() const { return (permissions & PERM_ACL_ROLE_MASK) == PERM_ACL_ADMIN; }
 };

@@ -107,6 +107,7 @@ void BaseChatMesh::populateContactFromAdvert(ContactInfo& ci, const mesh::Identi
   memset(&ci, 0, sizeof(ci));
   ci.id = id;
   ci.out_path_len = OUT_PATH_UNKNOWN;
+  ci.alt_path_len = OUT_PATH_UNKNOWN;   // transient, always starts unset
   StrHelper::strncpy(ci.name, parser.getName(), sizeof(ci.name));
   ci.type = parser.getType();
   if (parser.hasLatLon()) {
@@ -340,6 +341,13 @@ bool BaseChatMesh::onContactPathRecv(ContactInfo& from, uint8_t* in_path, uint8_
     }
   } else if (extra_type == PAYLOAD_TYPE_RESPONSE && extra_len > 0) {
     onContactResponse(from, extra, extra_len);
+  } else if (extra_type == PATH_EXTRA_TYPE_ALT_PATH && extra_len >= 1) {
+    // dual-path reply: bank the secondary route alongside the primary
+    uint8_t alt_len = extra[0];
+    uint8_t alt_bytes = (alt_len & 63) * ((((alt_len >> 6) & 3) + 1));
+    if (1 + (int)alt_bytes <= (int)extra_len && mesh::Packet::isValidPathLen(alt_len)) {
+      from.alt_path_len = mesh::Packet::copyPath(from.alt_path, &extra[1], alt_len);
+    }
   }
   return true;  // send reciprocal path if necessary
 }
@@ -802,6 +810,7 @@ void BaseChatMesh::checkConnections() {
 
 void BaseChatMesh::resetPathTo(ContactInfo& recipient) {
   recipient.out_path_len = OUT_PATH_UNKNOWN;
+  recipient.alt_path_len = OUT_PATH_UNKNOWN;   // path rediscovery invalidates the alternate too
 }
 
 static ContactInfo* table;  // pass via global :-(

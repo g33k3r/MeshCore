@@ -167,6 +167,7 @@ protected:
   void onTraceRecv(mesh::Packet* packet, uint32_t tag, uint32_t auth_code, uint8_t flags, const uint8_t* path_snrs, const uint8_t* path_hashes, uint8_t path_len) override;
   void onAlternatePathRecv(mesh::Packet* packet, const uint8_t* path, uint8_t path_len) override;
   void considerClientPath(ClientInfo* client, uint8_t path_len, const uint8_t* path, float rx_snr);
+  void sendAltPathReply(ClientInfo* client, const uint8_t* secret, mesh::Packet* packet);
   void onAckRecv(mesh::Packet* packet, uint32_t ack_crc) override;
 
 #if ENV_INCLUDE_GPS == 1
