@@ -803,10 +803,20 @@ void MyMesh::considerClientPath(ClientInfo* client, uint8_t path_len, const uint
 // A duplicate flood arriving via a different route is a free path candidate.
 // v1: adverts only — their signed pubkey fully identifies the sender.
 void MyMesh::onAlternatePathRecv(mesh::Packet* packet, const uint8_t* path, uint8_t path_len) {
-  if (packet->getPayloadType() != PAYLOAD_TYPE_ADVERT) return;
-  if (packet->payload_len < PUB_KEY_SIZE) return;
-  mesh::Identity id(packet->payload);
-  ClientInfo* client = acl.getClient(id.pub_key, PUB_KEY_SIZE);
+  ClientInfo* client = NULL;
+  if (packet->getPayloadType() == PAYLOAD_TYPE_ADVERT) {
+    if (packet->payload_len < PUB_KEY_SIZE) return;
+    mesh::Identity id(packet->payload);
+    client = acl.getClient(id.pub_key, PUB_KEY_SIZE);   // signed pubkey: full identification
+  } else if (packet->getPayloadType() == PAYLOAD_TYPE_TXT_MSG
+             || packet->getPayloadType() == PAYLOAD_TYPE_REQ
+             || packet->getPayloadType() == PAYLOAD_TYPE_RESPONSE) {
+    if (packet->payload_len < 2) return;
+    if (searchPeersByHash(&packet->payload[1]) != 1) return;   // ambiguous or unknown sender: skip
+    client = acl.getClientByIdx(matching_peer_indexes[0]);     // unique 1-byte hash match
+  } else {
+    return;   // v1: adverts + message floods only
+  }
   if (client == NULL) return;   // only track known clients
   considerClientPath(client, path_len, path, packet->getSNR());
 }

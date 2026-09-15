@@ -138,6 +138,9 @@ DispatcherAction Mesh::onRecvPacket(Packet* pkt) {
       uint8_t* macAndData = &pkt->payload[i];   // MAC + encrypted data 
       if (i + CIPHER_MAC_SIZE >= pkt->payload_len) {
         MESH_DEBUG_PRINTLN("%s Mesh::onRecvPacket(): incomplete data packet", getLogDateTime());
+      } else if (_tables->wasSeen(pkt) && pkt->isRouteFlood()) {
+        // duplicate via another route: the route itself is new information
+        onAlternatePathRecv(pkt, pkt->path, pkt->path_len);
       } else if (!_tables->wasSeen(pkt)) {
         _tables->markSeen(pkt);
         // NOTE: this is a 'first packet wins' impl. When receiving from multiple paths, the first to arrive wins.

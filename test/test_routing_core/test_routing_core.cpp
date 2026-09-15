@@ -303,3 +303,26 @@ TEST_F(RoutingCore, DuplicateFloodViaDifferentRouteYieldsAltPath) {
   ASSERT_EQ(b->mesh.last_alt_path_len, 1u);
   EXPECT_EQ(b->mesh.last_alt_path[0], 0xCC);  // C's hash prefix
 }
+
+
+TEST_F(RoutingCore, DuplicateMessageFloodYieldsAltPath) {
+  // Diamond topology with an addressed message: A sends TXT_MSG to B,
+  // directly AND via C — the dup via C must surface C's route.
+  a->connect(*b);
+  a->connect(*c);
+  c->connect(*b);
+  b->mesh.known_peer = true;
+  memset(b->mesh.shared_secret, 0x5A, PUB_KEY_SIZE);
+
+  const uint8_t msg[] = "route me";
+  auto* pkt = a->mesh.createDatagram(PAYLOAD_TYPE_TXT_MSG, b->mesh.self_id,
+                                     b->mesh.shared_secret, msg, sizeof(msg));
+  ASSERT_NE(pkt, nullptr);
+  a->mesh.sendFlood(pkt, 0u);
+  run({a.get(), b.get(), c.get()});
+
+  EXPECT_EQ(b->mesh.peer_msgs, 1);        // delivered once
+  EXPECT_EQ(b->mesh.alt_paths, 1);        // C's route captured from the dup
+  ASSERT_EQ(b->mesh.last_alt_path_len, 1u);
+  EXPECT_EQ(b->mesh.last_alt_path[0], 0xCC);
+}
