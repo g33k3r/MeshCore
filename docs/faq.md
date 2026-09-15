@@ -191,6 +191,13 @@ Use the smartphone client or the repeater setup feature on the web flasher to se
 
 Recently, as of October 2025, many regions have moved to the "narrow" setting, aka using BW62.5 and a lower SF number (instead of the original SF11). For example, USA/Canada (Recommended) preset is 910.525MHz, SF7, BW62.5, CR5.
 
+For US users fighting urban noise, two community-tested settings (settable as raw parameters — see your client's frequency settings):
+
+- **USA Regulatory-style** (`#945`): 910.25 MHz, BW 500 kHz, SF 10, CR 5 — aligns with FCC 15.247(a)(2) digital-modulation minimums (≥500 kHz 6-dB bandwidth) and showed the best measured coverage in community field tests.
+- **USA Southern California** (`#1798`): 927.875 MHz, BW 62.5 kHz, SF 7, CR 8 — an alternative frequency for regions where 910.x is unusable due to interference.
+
+Both frequencies are accepted by repeater **repeat-mode** frequency validation.
+
 After extensive testing, many regions have switched or about to switch over to BW62.5 and SF7, 8, or 9. Narrower bandwidth setting and lower SF setting allow MeshCore's radio signals to fit between interference in the ISM band, provide for a lower noise floor, better SNR, and faster transmissions.
 
 If you have consensus from your community in your region to update your region's preset recommendation, please post your update request on  the [#meshcore-app](https://discord.com/channels/1343693475589263471/1391681655911088241) channel on the [MeshCore Discord server ](https://meshcore.gg) to let Liam Cottle know.
