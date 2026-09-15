@@ -92,3 +92,42 @@ TEST(PacketFuzz, Regression_TruncatedTransportFrameRejectedNotOverread) {
   Packet p;
   EXPECT_FALSE(p.readFrom(tiny, 2));   // rejected, no OOB read (valgrind-gated)
 }
+
+TEST(PacketFuzz, RandomizedWriteReadRoundTripIdentity) {
+  uint32_t seed = 0x5EED1234;
+  for (int iter = 0; iter < 2000; iter++) {
+    seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+    Packet p;
+    uint8_t route = (seed >> 8) % 2 ? ROUTE_TYPE_FLOOD : ROUTE_TYPE_DIRECT;
+    uint8_t type = (seed >> 4) % 16;
+    p.header = (type << PH_TYPE_SHIFT) | route;
+    seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+    uint8_t sz = 1 + ((seed >> 6) & 1);            // 1 or 2
+    uint8_t count = (seed % 8);                     // 0..7 hops
+    p.setPathHashSizeAndCount(sz, count);
+    for (int k = 0; k < count * sz; k++) {
+      seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+      p.path[k] = seed >> 24;
+    }
+    seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+    // NOTE (characterized): zero-payload packets do NOT round-trip — writeTo
+    // emits them but readFrom treats 'no payload bytes' as bad encoding.
+    // The wire contract requires >= 1 payload byte; the property respects it.
+    uint8_t plen = 1 + (seed % 119);
+    for (int k = 0; k < plen; k++) {
+      seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+      p.payload[k] = seed >> 24;
+    }
+    p.payload_len = plen;
+
+    uint8_t buf[300];
+    uint8_t len = p.writeTo(buf);
+    Packet q;
+    ASSERT_TRUE(q.readFrom(buf, len)) << "iter " << iter;
+    ASSERT_EQ(q.header, p.header) << "iter " << iter;
+    ASSERT_EQ(q.path_len, p.path_len) << "iter " << iter;
+    ASSERT_EQ(q.payload_len, p.payload_len) << "iter " << iter;
+    ASSERT_EQ(memcmp(q.path, p.path, count * sz), 0) << "iter " << iter;
+    ASSERT_EQ(memcmp(q.payload, p.payload, plen), 0) << "iter " << iter;
+  }
+}
