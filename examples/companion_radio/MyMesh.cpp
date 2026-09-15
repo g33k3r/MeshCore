@@ -184,8 +184,11 @@ void MyMesh::writeContactRespFrame(uint8_t code, const ContactInfo &contact) {
   i += 4;
   memcpy(&out_frame[i], &contact.lastmod, 4);
   i += 4;
-  if (app_target_ver >= PATHQ_MIN_APP_VER) {
-    i += appendPathQualityTail(&out_frame[i], contact);   // private dialect (v90+)
+  if (app_target_ver >= PATHQ_ALT_MIN_APP_VER) {
+    // v91+: quality + alternate route bytes (frame-budget capped)
+    i += appendPathQualityTailEx(&out_frame[i], contact, 176 - i - 1);
+  } else if (app_target_ver >= PATHQ_MIN_APP_VER) {
+    i += appendPathQualityTail(&out_frame[i], contact);   // private dialect (v90)
   }
   _serial->writeFrame(out_frame, i);
 }
