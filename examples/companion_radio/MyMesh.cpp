@@ -1390,7 +1390,7 @@ void MyMesh::handleCmdFrame(size_t len) {
       out_frame[0] = RESP_CODE_NO_MORE_MESSAGES;
       _serial->writeFrame(out_frame, 1);
     }
-  } else if (cmd_frame[0] == CMD_SET_RADIO_PARAMS) {
+  } else if (cmd_frame[0] == CMD_SET_RADIO_PARAMS && len >= 11) {   // cmd + freq + bw + sf + cr (+optional repeat)
     int i = 1;
     uint32_t freq;
     memcpy(&freq, &cmd_frame[i], 4);
@@ -1436,7 +1436,7 @@ void MyMesh::handleCmdFrame(size_t len) {
       radio_driver.setTxPower(_prefs.tx_power_dbm);
       writeOKFrame();
     }
-  } else if (cmd_frame[0] == CMD_SET_TUNING_PARAMS) {
+  } else if (cmd_frame[0] == CMD_SET_TUNING_PARAMS && len >= 9) {   // cmd + rx + af
     int i = 1;
     uint32_t rx, af;
     memcpy(&rx, &cmd_frame[i], 4);
