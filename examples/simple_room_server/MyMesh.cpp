@@ -325,6 +325,10 @@ void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const m
                             uint8_t *data, size_t len) {
   if (packet->getPayloadType() == PAYLOAD_TYPE_ANON_REQ) { // received an initial request by a possible admin
                                                            // client (unknown at this stage)
+    // Explicit floor (login reads data[0..8]): decrypted anon payloads are
+    // block-aligned (>= 16B) in practice, but the invariant is the cipher's,
+    // not this parser's — guard it here.
+    if (len < 9) return;
     uint32_t sender_timestamp, sender_sync_since;
     memcpy(&sender_timestamp, data, 4);
     memcpy(&sender_sync_since, &data[4], 4); // sender's "sync messags SINCE x" timestamp
