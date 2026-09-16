@@ -194,6 +194,11 @@ void MyMesh::writeContactRespFrame(uint8_t code, const ContactInfo &contact) {
 }
 
 void MyMesh::updateContactFromFrame(ContactInfo &contact, uint32_t& last_mod, const uint8_t *frame, int len) {
+  // Defense in depth: the mandatory section is 1 + 32 + 3 + 64 + 32 + 4 = 136
+  // bytes. A short frame previously read past the buffer here (caller only
+  // gated at 36). Malformed frames leave the contact untouched.
+  const int mandatory = 1 + PUB_KEY_SIZE + 3 + MAX_PATH_SIZE + 32 + 4;
+  if (len < mandatory) return;
   int i = 0;
   uint8_t code = frame[i++]; // eg. CMD_ADD_UPDATE_CONTACT
   memcpy(contact.id.pub_key, &frame[i], PUB_KEY_SIZE);
@@ -1287,7 +1292,7 @@ void MyMesh::handleCmdFrame(size_t len) {
     } else {
       writeErrFrame(ERR_CODE_NOT_FOUND); // unknown contact
     }
-  } else if (cmd_frame[0] == CMD_ADD_UPDATE_CONTACT && len >= 1 + 32 + 2 + 1) {
+  } else if (cmd_frame[0] == CMD_ADD_UPDATE_CONTACT && len >= 1 + PUB_KEY_SIZE + 3 + MAX_PATH_SIZE + 32 + 4) {
     uint8_t *pub_key = &cmd_frame[1];
     ContactInfo *recipient = lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
     uint32_t last_mod = getRTCClock()->getCurrentTime();  // fallback value if not present in cmd_frame
