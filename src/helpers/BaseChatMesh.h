@@ -7,6 +7,8 @@
 
 #define MAX_TEXT_LEN    (10*CIPHER_BLOCK_SIZE)  // must be LESS than (MAX_PACKET_PAYLOAD - 4 - CIPHER_MAC_SIZE - 1)
 
+#include <helpers/LzwCodec.h>   // g33k3r fork: TXT compression (mesh:: namespace)
+
 #include "ContactInfo.h"
 
 #define MAX_SEARCH_RESULTS   8

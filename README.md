@@ -26,6 +26,10 @@ All found by the fork's own fuzzing + valgrind CI gate, day one.
 - **Measured, not guessed** — completed client traceroutes (TRACE) are correlated with stored paths to record each route's real bottleneck SNR; direct-neighbor paths are measured at receipt. RF state is transient by design (never persisted).
 - **Multi-path learning** — duplicate floods arriving via different routes donate their route as a path candidate (packet hash covers payload only, so a second route is provably new). Adverts (signed pubkey) and addressed messages (unique hash match) both feed promotion. Zero extra mesh traffic.
 
+### LZW message compression (firmware-to-firmware)
+- Text is compressed **inside the end-to-end encryption** — intermediate nodes route ciphertext blindly, stock peers always receive plain text. Capability is discovered over the mesh via the advert feat1 field upstream reserves for future features (bit0 = LZW); see `docs/lzw-compression.md`.
+- 9→12-bit LZW, 12 KB static tables, adversarially-safe decode; ACK hashes stay exact via an explicit length byte. Typical short-text ratio 1.2–1.4x (dictionary warm-up bound; LZSS is the v2 path).
+
 ### Frequency support
 - Repeat-mode whitelist accepts **910.250 MHz** (FCC 15.247(a)(2)-aligned community setting, issue #945) and **927.875 MHz** (SoCal alternative, issue #1798); documented in the FAQ.
 
@@ -150,7 +154,7 @@ There are a number of fairly major features in the pipeline, with no particular 
 - [X] Core + Repeater: enhanced zero-hop neighbour discovery
 - [ ] Core: round-trip manual path support
 - [ ] Companion + Apps: support for multiple sub-meshes (and 'off-grid' client repeat mode)
-- [ ] Core + Apps: support for LZW message compression
+- [X] Core + Apps: support for LZW message compression *(this fork: firmware-to-firmware, inside E2E encryption — see docs/lzw-compression.md)*
 - [ ] Core: dynamic CR (Coding Rate) for weak vs strong hops
 - [ ] Core: new framework for hosting multiple virtual nodes on one physical device
 - [ ] V2 protocol spec: discussion and consensus around V2 packet protocol, including path hashes, new encryption specs, etc

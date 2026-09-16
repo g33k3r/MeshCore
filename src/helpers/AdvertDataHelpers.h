@@ -16,6 +16,10 @@
 #define ADV_FEAT2_MASK        0x40   // FUTURE
 #define ADV_NAME_MASK         0x80
 
+// g33k3r fork: feat1 carries a capability bitfield (upstream reserves the
+// field; stock nodes parse and ignore it). bit0 = LZW TXT compression.
+#define ADV_FEAT1_FORK_LZW    0x0001
+
 class AdvertDataBuilder {
   uint8_t _type;
   bool _has_loc;

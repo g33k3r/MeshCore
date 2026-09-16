@@ -23,6 +23,7 @@ struct ContactInfo {
   uint8_t alt_path_len;                 // secondary route to this contact (OUT_PATH_UNKNOWN = none)
   uint8_t alt_path[MAX_PATH_SIZE];
   int16_t path_snr4;                    // measured bottleneck SNR*4 of out_path (mesh::PATH_SNR_UNKNOWN = unmeasured)
+  uint16_t fork_caps;                   // sender's fork capability bits from advert feat1 (0 = stock/unknown)
 
   const uint8_t* getSharedSecret(const mesh::LocalIdentity& self_id) const {
     if (!shared_secret_valid) {

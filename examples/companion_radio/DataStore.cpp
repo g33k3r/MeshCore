@@ -282,6 +282,7 @@ File file = openRead(_getContactsChannelsFS(), "/contacts3");
 
         c.id = mesh::Identity(pub_key);
         c.alt_path_len = OUT_PATH_UNKNOWN;   // transient, not persisted
+        c.fork_caps = 0;                     // transient: re-learned from next advert
         if (!host->onContactLoaded(c)) full = true;
       }
       file.close();

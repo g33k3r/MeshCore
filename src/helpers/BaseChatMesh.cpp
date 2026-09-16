@@ -21,6 +21,7 @@ mesh::Packet* BaseChatMesh::createSelfAdvert(const char* name) {
   uint8_t app_data_len;
   {
     AdvertDataBuilder builder(ADV_TYPE_CHAT, name);
+    builder.setFeat1(ADV_FEAT1_FORK_LZW);   // g33k3r fork caps (stock peers ignore)
     app_data_len = builder.encodeTo(app_data);
   }
 
@@ -111,6 +112,7 @@ void BaseChatMesh::populateContactFromAdvert(ContactInfo& ci, const mesh::Identi
   ci.path_snr4 = mesh::PATH_SNR_UNKNOWN;
   StrHelper::strncpy(ci.name, parser.getName(), sizeof(ci.name));
   ci.type = parser.getType();
+  ci.fork_caps = parser.getFeat1();     // g33k3r fork capability bits (0 on stock peers)
   if (parser.hasLatLon()) {
     ci.gps_lat = parser.getIntLat();
     ci.gps_lon = parser.getIntLon();
@@ -236,15 +238,33 @@ void BaseChatMesh::onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender
     // len can be > original length, but 'text' will be padded with zeroes
     data[len] = 0; // need to make a C string again, with null terminator
 
+    // g33k3r fork: LZW-compressed text from a capable peer — decompress
+    // before delivery. Wire layout: [0x1F][lzw_len u8][stream]. Corruption or
+    // truncation drops the message (no ACK): the sender retries or the user
+    // sees the failure — correct semantics for an undecodable payload.
+    const uint8_t* text_ptr = &data[5];
+    bool compressed = (data[5] == TXT_PAYLOAD_LZW_MARKER);
+    static uint8_t lzw_text[MAX_TEXT_LEN + 1];
+    if (compressed) {
+      if (len < 7 || data[6] == 0) return;   // truncated / empty stream
+      static mesh::LzwCodec lzw;
+      int dlen = lzw.decompress(&data[7], data[6], lzw_text, sizeof(lzw_text));
+      if (dlen < 1 || lzw_text[dlen - 1] != 0) {
+        MESH_DEBUG_PRINTLN("onPeerDataRecv: corrupt LZW payload dropped (dlen=%d)", dlen);
+        return;
+      }
+      text_ptr = lzw_text;
+    }
+
     if (flags == TXT_TYPE_PLAIN) {
       from.lastmod = getRTCClock()->getCurrentTime(); // update last heard time
-      onMessageRecv(from, packet, timestamp, (const char *) &data[5]);  // let UI know
+      onMessageRecv(from, packet, timestamp, (const char *)text_ptr);  // let UI know
 
-      int text_len = strlen((char *)&data[5]);
+      int wire_text_len = compressed ? (2 + data[6]) : strlen((char *)&data[5]);
       uint8_t ack_hash[6];    // calc truncated hash of the message timestamp + text + sender pub_key, to prove to sender that we got it
-      mesh::Utils::sha256(ack_hash, 4, data, 5 + text_len, from.id.pub_key, PUB_KEY_SIZE);
+      mesh::Utils::sha256(ack_hash, 4, data, 5 + wire_text_len, from.id.pub_key, PUB_KEY_SIZE);
       // NEW: append (potential) extended attempt byte (to make packethash unique)
-      ack_hash[4] = data[5 + text_len + 1];
+      ack_hash[4] = data[5 + wire_text_len + 1];
       getRNG()->random(&ack_hash[5], 1);  // make 6th byte random
 
       if (packet->isRouteFlood()) {
@@ -464,10 +484,29 @@ mesh::Packet* BaseChatMesh::composeMsgPacket(const ContactInfo& recipient, uint3
   temp[4] = (attempt & 3);
   memcpy(&temp[5], text, text_len + 1);
 
-  // calc expected ACK reply
-  mesh::Utils::sha256((uint8_t *)&expected_ack, 4, temp, 5 + text_len, self_id.pub_key, PUB_KEY_SIZE);
+  // g33k3r fork: LZW-compress the text for capable peers (inside the E2E
+  // encryption; stock peers always receive plain text). Wire layout when
+  // compressed: [ts 4][flags 1][0x1F][lzw_len u8][lzw stream]. The explicit
+  // length byte keeps ACK hashes exact (compressed streams contain NULs, so
+  // strlen semantics cannot be used) and lets the decoder bound its input.
+  // Legacy layout is untouched otherwise, so stock receivers are unaffected.
+  int wire_text_len = text_len;   // bytes after the 5-byte header
+  if ((recipient.fork_caps & ADV_FEAT1_FORK_LZW) && text_len >= LZW_MIN_TEXT_TO_COMPRESS) {
+    static mesh::LzwCodec lzw;   // fixed tables, no heap — single-radio-thread use
+    static uint8_t lzw_buf[MAX_TEXT_LEN + 2];
+    int clen = lzw.compress((const uint8_t*)&temp[5], text_len + 1, lzw_buf, sizeof(lzw_buf));
+    if (clen > 0 && (size_t)clen + 2 < (size_t)text_len) {   // must beat marker+len overhead
+      temp[5] = TXT_PAYLOAD_LZW_MARKER;
+      temp[6] = (uint8_t)clen;
+      memcpy(&temp[7], lzw_buf, clen);
+      wire_text_len = 2 + clen;
+    }
+  }
 
-  int len = 5 + text_len;
+  // calc expected ACK reply (over the exact wire bytes: 5 header + wire payload)
+  mesh::Utils::sha256((uint8_t *)&expected_ack, 4, temp, 5 + wire_text_len, self_id.pub_key, PUB_KEY_SIZE);
+
+  int len = 5 + wire_text_len;
   if (attempt > 3) {
     temp[len++] = 0;  // null terminator
     temp[len++] = attempt;  // hide attempt number at tail end of payload
