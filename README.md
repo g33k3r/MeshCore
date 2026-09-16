@@ -6,6 +6,21 @@ MeshCore is a lightweight, portable C++ library that enables multi-hop packet ro
 
 Private improvements over upstream — none upstreamed, all CI-gated (unit + characterization tests + valgrind memory-safety gate on every push).
 
+### Hostile-input hardening (4 fixes)
+- `Packet::readFrom` bounds checked BEFORE reads (was: memcpy before length guard — OOB on truncated radio frames)
+- `updateContactFromFrame` length-gated at the true 136-byte mandatory size (was: 36-byte caller gate vs 136-byte reads — ~100B BLE overread)
+- `CMD_SET_RADIO_PARAMS` / `CMD_SET_TUNING_PARAMS` length-gated (tuning values were also accepted unvalidated and flash-persisted)
+- Anon-login handlers carry explicit length floors (cipher block-alignment made explicit)
+
+All found by the fork's own fuzzing + valgrind CI gate, day one.
+
+### Client dialect (v90/v91, wire-compatible)
+- Contact frames carry [bottleneck SNR*4][flags] (v90) and the alternate
+  route bytes (v91) when the connected app identifies as protocol v90+ —
+  upstream gates treat 90 identically to today's versions on stock nodes.
+- The companion client fork parses + surfaces it: route-quality labels,
+  alt-path-aware retry rotation.
+
 ### Routing quality (the big one)
 - **Path-quality selection** — return paths compete on a measured metric: bottleneck SNR (weakest-link) dominates, hops penalized ~1 dB each. Replaces first-/last-arrival path wins in the repeater and room server.
 - **Measured, not guessed** — completed client traceroutes (TRACE) are correlated with stored paths to record each route's real bottleneck SNR; direct-neighbor paths are measured at receipt. RF state is transient by design (never persisted).
