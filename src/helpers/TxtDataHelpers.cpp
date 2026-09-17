@@ -102,9 +102,12 @@ static void _ftoa(float f, char *p, int *status)
     *p++ = '0';
   else 
   {
-    ltoa(int_part, p, 10);
-    while (*p)
-      p++;
+    // fork: portable conversion — STM32 newlib lacks ltoa()
+    uint32_t v = (int_part < 0) ? -(uint32_t)int_part : (uint32_t)int_part;
+    char tmp[10];
+    int n = 0;
+    do { tmp[n++] = '0' + (v % 10u); v /= 10u; } while (v);
+    while (n > 0) *p++ = tmp[--n];
   }
   *p++ = '.';
   if (frac_part == 0)
