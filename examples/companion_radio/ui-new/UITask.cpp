@@ -52,23 +52,15 @@ public:
   }
 
   int render(DisplayDriver& display) override {
-    // meshcore logo
+    // geekcore wordmark (fork branding)
     display.setColor(UIColor::corp_blue);
-    int logoWidth = 128;
-    display.drawXbm((display.width() - logoWidth) / 2, 3, meshcore_logo, logoWidth, 13);
-
-    // meshcore website
-    const char* website = "https://meshcore.io";
-    display.setColor(UIColor::primary_txt);
-    display.setTextSize(1);
-    uint16_t websiteWidth = display.getTextWidth(website);
-    display.setCursor((display.width() - websiteWidth) / 2, 22);
-    display.print(website);
+    display.setTextSize(2);
+    display.drawTextCentered(display.width()/2, 3, "GeekCore");
 
     // version info
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
-    display.drawTextCentered(display.width()/2, 35, _version_info);
+    display.drawTextCentered(display.width()/2, 26, _version_info);
 
     display.setColor(UIColor::secondary_txt);
     display.setTextSize(1);

@@ -56,16 +56,10 @@ void UITask::begin(NodePrefs* node_prefs, const char* build_date, const char* fi
 void UITask::renderCurrScreen() {
   char tmp[80];
   if (millis() < _started_at + BOOT_SCREEN_MILLIS) { // boot screen
-    // meshcore logo
+    // geekcore wordmark (fork branding)
     _display->setColor(UIColor::corp_blue);
-    int logoWidth = 128;
-    _display->drawXbm((_display->width() - logoWidth) / 2, 3, meshcore_logo, logoWidth, 13);
-
-    // meshcore website
-    const char* website = "https://meshcore.io";
-    _display->setColor(UIColor::primary_txt);
-    _display->setTextSize(1);
-    _display->drawTextCentered(_display->width() / 2, 22, website);
+    _display->setTextSize(2);
+    _display->drawTextCentered(_display->width() / 2, 3, "GeekCore");
 
     // version info
     _display->setTextSize(1);
@@ -75,16 +69,10 @@ void UITask::renderCurrScreen() {
     const char* node_type = "< Repeater >";
     _display->drawTextCentered(_display->width() / 2, 48, node_type);
   } else if (_powering_off_at > 0) {
-    // meshcore logo
+    // geekcore wordmark (fork branding)
     _display->setColor(UIColor::corp_blue);
-    int logoWidth = 128;
-    _display->drawXbm((_display->width() - logoWidth) / 2, 3, meshcore_logo, logoWidth, 13);
-
-    // meshcore website
-    const char* website = "https://meshcore.io";
-    _display->setColor(UIColor::primary_txt);
-    _display->setTextSize(1);
-    _display->drawTextCentered(_display->width()/ 2, 22, website);
+    _display->setTextSize(2);
+    _display->drawTextCentered(_display->width() / 2, 3, "GeekCore");
 
     // Powering off
     const char* poweroff_string = "Turning OFF";
