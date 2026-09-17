@@ -18,9 +18,14 @@ struct VirtualRadio : public mesh::Radio {
   std::vector<VirtualRadio*> peers;
   float snr = -7.5f;
   float rssi = -95.0f;
+  float demod_floor = -15.0f;   // fork: SF10-ish floor for adaptive-CR policy tests
   size_t sent = 0;
   bool drop_next = false;   // test hook: swallow next transmission into the void
   std::vector<uint8_t> last_tx;   // raw frame of the most recent transmission
+  std::vector<uint8_t> cr_log;    // fork: record setCodingRate calls (0 = restore configured default)
+
+  void setCodingRate(uint8_t cr) override { cr_log.push_back(cr); }
+  float getDemodFloorSnr() const override { return demod_floor; }
 
   int recvRaw(uint8_t* bytes, int sz) override {
     if (rxQ.empty()) return 0;

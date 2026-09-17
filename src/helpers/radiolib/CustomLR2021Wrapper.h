@@ -20,6 +20,7 @@ public:
     ((CustomLR2021 *)_radio)->setSpreadingFactor(sf);
     ((CustomLR2021 *)_radio)->setBandwidth(bw);
     ((CustomLR2021 *)_radio)->setCodingRate(cr);
+    _default_cr = cr;   // fork: remember configured default for adaptive CR
     updatePreamble(sf);
     applySideDetectorConfig();
     PacketMillis pm = calcMaxPacketMillis(sf, bw, cr, preambleLengthForSF(sf));
@@ -27,6 +28,8 @@ public:
     ((CustomLR2021 *)_radio)->setMaxPayloadMillis(pm.payloadMillis);
 
   }
+
+  void applyCodingRate(uint8_t cr) override { ((CustomLR2021 *)_radio)->setCodingRate(cr); }   // fork
 
   bool configSideDetectors(const uint8_t* sideDetSFs, uint8_t num, float bw) override {
     LR2021LoRaSideDetector_t tmp[3];

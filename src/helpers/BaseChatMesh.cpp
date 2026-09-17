@@ -1,5 +1,6 @@
 #include <helpers/BaseChatMesh.h>
 #include <Utils.h>
+#include <helpers/CodingRatePolicy.h>
 
 #ifndef SERVER_RESPONSE_DELAY
   #define SERVER_RESPONSE_DELAY   300
@@ -47,13 +48,27 @@ void BaseChatMesh::sendAckTo(const ContactInfo& dest, const uint8_t* ack_hash, u
     uint32_t d = TXT_ACK_DELAY;
     if (getExtraAckTransmitCount() > 0) {
       mesh::Packet* a1 = createMultiAck(ack_hash, ack_len, 1);
-      if (a1) sendDirect(a1, dest.out_path, dest.out_path_len, d);
+      if (a1) sendDirectContact(a1, dest, d);
       d += 300;
     }
 
     mesh::Packet* a2 = createAck(ack_hash, ack_len);
-    if (a2) sendDirect(a2, dest.out_path, dest.out_path_len, d);
+    if (a2) sendDirectContact(a2, dest, d);
   }
+}
+
+void BaseChatMesh::sendDirectContact(mesh::Packet* packet, const ContactInfo& dest, uint32_t delay_millis) {
+  // fork: link-adaptive CR — apply only for direct-neighbour sends over a freshly
+  // measured link; everything else keeps the radio's configured default.
+  if (dest.out_path_len != OUT_PATH_UNKNOWN && (dest.out_path_len & 63) == 0
+      && dest.path_snr4 != mesh::PATH_SNR_UNKNOWN && dest.path_snr4_time != 0) {
+    uint32_t now = getRTCClock()->getCurrentTime();
+    if (now >= dest.path_snr4_time && now - dest.path_snr4_time <= mesh::ADAPTIVE_CR_FRESH_SECS) {
+      packet->tx_cr = mesh::adaptiveCodingRate(dest.path_snr4, _radio->getDemodFloorSnr(),
+                                               now - dest.path_snr4_time);
+    }
+  }
+  sendDirect(packet, dest.out_path, dest.out_path_len, delay_millis);
 }
 
 void BaseChatMesh::bootstrapRTCfromContacts() {
@@ -198,6 +213,10 @@ void BaseChatMesh::onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id, 
   }
   from->last_advert_timestamp = timestamp;
   from->lastmod = getRTCClock()->getCurrentTime();
+  if (packet->getPathHashCount() == 0) {   // fork: direct-neighbour advert = fresh link measurement
+    from->path_snr4 = (int16_t)(packet->getSNR() * 4.0f);
+    from->path_snr4_time = from->lastmod;
+  }
 
   onDiscoveredContact(*from, is_new, packet->path_len, packet->path);       // let UI know
 }
@@ -258,6 +277,10 @@ void BaseChatMesh::onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender
 
     if (flags == TXT_TYPE_PLAIN) {
       from.lastmod = getRTCClock()->getCurrentTime(); // update last heard time
+      if (packet->getPathHashCount() == 0) {   // fork: direct-neighbour message = fresh link measurement
+        from.path_snr4 = (int16_t)(packet->getSNR() * 4.0f);
+        from.path_snr4_time = from.lastmod;
+      }
       onMessageRecv(from, packet, timestamp, (const char *)text_ptr);  // let UI know
 
       int wire_text_len = compressed ? (2 + data[6]) : strlen((char *)&data[5]);
@@ -289,6 +312,10 @@ void BaseChatMesh::onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender
         from.sync_since = timestamp;
       }
       from.lastmod = getRTCClock()->getCurrentTime(); // update last heard time
+      if (packet->getPathHashCount() == 0) {   // fork: direct-neighbour message = fresh link measurement
+        from.path_snr4 = (int16_t)(packet->getSNR() * 4.0f);
+        from.path_snr4_time = from.lastmod;
+      }
       onSignedMessageRecv(from, packet, timestamp, &data[5], (const char *) &data[9]);  // let UI know
 
       uint32_t ack_hash;    // calc truncated hash of the message timestamp + text + OUR pub_key, to prove to sender that we got it
@@ -319,7 +346,7 @@ void BaseChatMesh::onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender
         mesh::Packet* reply = createDatagram(PAYLOAD_TYPE_RESPONSE, from.id, secret, temp_buf, reply_len);
         if (reply) {
           if (from.out_path_len != OUT_PATH_UNKNOWN) {  // we have an out_path, so send DIRECT
-            sendDirect(reply, from.out_path, from.out_path_len, SERVER_RESPONSE_DELAY);
+            sendDirectContact(reply, from, SERVER_RESPONSE_DELAY);
           } else {
             sendFloodScoped(from, reply, SERVER_RESPONSE_DELAY);
           }
@@ -370,6 +397,7 @@ bool BaseChatMesh::onPeerPathRecv(mesh::Packet* packet, int sender_idx, const ui
   // direct-neighbor routes (no forwarders) are fully measured by this hop
   if ((path_len & 63) == 0) {
     from.path_snr4 = (int16_t)(packet->getSNR() * 4.0f);
+    from.path_snr4_time = getRTCClock()->getCurrentTime();
   }
 
   return onContactPathRecv(from, packet->path, packet->path_len, path, path_len, extra_type, extra, extra_len);
@@ -418,7 +446,7 @@ void BaseChatMesh::handleReturnPathRetry(const ContactInfo& contact, const uint8
   // NOTE: simplest impl is just to re-send a reciprocal return path to sender (DIRECTLY)
   //        override this method in various firmwares, if there's a better strategy
   mesh::Packet* rpath = createPathReturn(contact.id, contact.getSharedSecret(self_id), path, path_len, 0, NULL, 0);
-  if (rpath) sendDirect(rpath, contact.out_path, contact.out_path_len, 3000);   // 3 second delay
+  if (rpath) sendDirectContact(rpath, contact, 3000);   // 3 second delay
 }
 
 #ifdef MAX_GROUP_CHANNELS
@@ -533,7 +561,8 @@ int  BaseChatMesh::sendMessage(const ContactInfo& recipient, uint32_t timestamp,
                    && (recipient.alt_path_len != OUT_PATH_UNKNOWN);
     const uint8_t* send_path = use_alt ? recipient.alt_path : recipient.out_path;
     uint8_t send_path_len = use_alt ? recipient.alt_path_len : recipient.out_path_len;
-    sendDirect(pkt, send_path, send_path_len);
+    if (use_alt) sendDirect(pkt, send_path, send_path_len);
+    else sendDirectContact(pkt, recipient);
     txt_send_timeout = futureMillis(est_timeout = calcDirectTimeoutMillisFor(t, send_path_len));
     rc = MSG_SEND_SENT_DIRECT;
   }
@@ -565,7 +594,8 @@ int  BaseChatMesh::sendCommandData(const ContactInfo& recipient, uint32_t timest
                    && (recipient.alt_path_len != OUT_PATH_UNKNOWN);
     const uint8_t* send_path = use_alt ? recipient.alt_path : recipient.out_path;
     uint8_t send_path_len = use_alt ? recipient.alt_path_len : recipient.out_path_len;
-    sendDirect(pkt, send_path, send_path_len);
+    if (use_alt) sendDirect(pkt, send_path, send_path_len);
+    else sendDirectContact(pkt, recipient);
     txt_send_timeout = futureMillis(est_timeout = calcDirectTimeoutMillisFor(t, send_path_len));
     rc = MSG_SEND_SENT_DIRECT;
   }
@@ -684,7 +714,7 @@ int BaseChatMesh::sendLogin(const ContactInfo& recipient, const char* password, 
       est_timeout = calcFloodTimeoutMillisFor(t);
       return MSG_SEND_SENT_FLOOD;
     } else {
-      sendDirect(pkt, recipient.out_path, recipient.out_path_len);
+      sendDirectContact(pkt, recipient);
       est_timeout = calcDirectTimeoutMillisFor(t, recipient.out_path_len);
       return MSG_SEND_SENT_DIRECT;
     }
@@ -709,7 +739,7 @@ int BaseChatMesh::sendAnonReq(const ContactInfo& recipient, const uint8_t* data,
       est_timeout = calcFloodTimeoutMillisFor(t);
       return MSG_SEND_SENT_FLOOD;
     } else {
-      sendDirect(pkt, recipient.out_path, recipient.out_path_len);
+      sendDirectContact(pkt, recipient);
       est_timeout = calcDirectTimeoutMillisFor(t, recipient.out_path_len);
       return MSG_SEND_SENT_DIRECT;
     }
@@ -736,7 +766,7 @@ int  BaseChatMesh::sendRequest(const ContactInfo& recipient, const uint8_t* req_
       est_timeout = calcFloodTimeoutMillisFor(t);
       return MSG_SEND_SENT_FLOOD;
     } else {
-      sendDirect(pkt, recipient.out_path, recipient.out_path_len);
+      sendDirectContact(pkt, recipient);
       est_timeout = calcDirectTimeoutMillisFor(t, recipient.out_path_len);
       return MSG_SEND_SENT_DIRECT;
     }
@@ -763,7 +793,7 @@ int  BaseChatMesh::sendRequest(const ContactInfo& recipient, uint8_t req_type, u
       est_timeout = calcFloodTimeoutMillisFor(t);
       return MSG_SEND_SENT_FLOOD;
     } else {
-      sendDirect(pkt, recipient.out_path, recipient.out_path_len);
+      sendDirectContact(pkt, recipient);
       est_timeout = calcDirectTimeoutMillisFor(t, recipient.out_path_len);
       return MSG_SEND_SENT_DIRECT;
     }
@@ -879,7 +909,7 @@ void BaseChatMesh::checkConnections() {
 
       auto pkt = createDatagram(PAYLOAD_TYPE_REQ, contact->id, contact->getSharedSecret(self_id), data, 9);
       if (pkt) {
-        sendDirect(pkt, contact->out_path, contact->out_path_len);
+        sendDirectContact(pkt, *contact);
       }
     
       // schedule next KEEP_ALIVE

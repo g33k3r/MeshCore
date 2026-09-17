@@ -16,8 +16,11 @@ public:
     ((CustomSX1276 *)_radio)->setSpreadingFactor(sf);
     ((CustomSX1276 *)_radio)->setBandwidth(bw);
     ((CustomSX1276 *)_radio)->setCodingRate(cr);
+    _default_cr = cr;   // fork: remember configured default for adaptive CR
     updatePreamble(sf);
   }
+
+  void applyCodingRate(uint8_t cr) override { ((CustomSX1276 *)_radio)->setCodingRate(cr); }   // fork
 
   bool isReceivingPacket() override { 
     return ((CustomSX1276 *)_radio)->isReceiving();

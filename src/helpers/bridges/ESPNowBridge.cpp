@@ -143,6 +143,7 @@ void ESPNowBridge::onDataRecv(const uint8_t *mac, const uint8_t *data, int32_t l
   // Create mesh packet
   mesh::Packet *pkt = _instance->_mgr->allocNew();
   if (!pkt) return;
+  pkt->tx_cr = 0;   // fork: clear recycled-packet adaptive-CR hint
 
   if (pkt->readFrom(decrypted + BRIDGE_CHECKSUM_SIZE, payloadLen)) {
     _instance->onPacketReceived(pkt);

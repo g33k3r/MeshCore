@@ -21,12 +21,14 @@ protected:
   uint16_t _num_floor_samples;
   int32_t _floor_sample_sum;
   uint8_t _preamble_sf;
+  uint8_t _default_cr = 5, _cur_cr = 5;   // fork: adaptive-CR bookkeeping (setParams records the default)
 
   void idle();
   void startRecv();
   float packetScoreInt(float snr, int sf, int packet_len);
   virtual bool isReceivingPacket() =0;
   virtual void doResetAGC();
+  virtual void applyCodingRate(uint8_t cr) =0;   // fork: chip-specific modem write
 
 public:
   RadioLibWrapper(PhysicalLayer& radio, mesh::MainBoard& board) : _radio(&radio), _board(&board), _preamble_sf(0) { n_recv = n_sent = 0; }
@@ -57,6 +59,16 @@ public:
   void updatePreamble(uint8_t sf) { _preamble_sf = sf; _radio->setPreambleLength(preambleLengthForSF(sf)); }
   PacketMillis calcMaxPacketMillis(uint8_t sf, float bw, uint8_t cr, uint8_t preambleSymbols);
   virtual int16_t performChannelScan();
+
+  // fork: link-adaptive coding rate. cr 0 restores the configured default
+  // (recorded by setParams); only writes the modem when the value changes.
+  void setCodingRate(uint8_t cr) override {
+    uint8_t use = (cr >= 5 && cr <= 8) ? cr : _default_cr;
+    if (use == _cur_cr) return;
+    _cur_cr = use;
+    applyCodingRate(use);
+  }
+  float getDemodFloorSnr() const override;
 
   int getNoiseFloor() const override { return _noise_floor; }
   void triggerNoiseFloorCalibrate(int threshold) override;

@@ -14,11 +14,14 @@ public:
     ((CustomSTM32WLx *)_radio)->setSpreadingFactor(sf);
     ((CustomSTM32WLx *)_radio)->setBandwidth(bw);
     ((CustomSTM32WLx *)_radio)->setCodingRate(cr);
+    _default_cr = cr;   // fork: remember configured default for adaptive CR
     updatePreamble(sf);
     PacketMillis pm = calcMaxPacketMillis(sf, bw, cr, preambleLengthForSF(sf));
     ((CustomSTM32WLx *)_radio)->setPreambleMillis(pm.preambleMillis);
     ((CustomSTM32WLx *)_radio)->setMaxPayloadMillis(pm.payloadMillis);
   }
+
+  void applyCodingRate(uint8_t cr) override { ((CustomSTM32WLx *)_radio)->setCodingRate(cr); }   // fork
 
   bool isReceivingPacket() override { 
     return ((CustomSTM32WLx *)_radio)->isReceiving();

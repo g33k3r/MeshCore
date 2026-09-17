@@ -30,6 +30,11 @@ All found by the fork's own fuzzing + valgrind CI gate, day one.
 - Text is compressed **inside the end-to-end encryption** — intermediate nodes route ciphertext blindly, stock peers always receive plain text. Capability is discovered over the mesh via the advert feat1 field upstream reserves for future features (bit0 = LZW); see `docs/lzw-compression.md`.
 - 9→12-bit LZW, 12 KB static tables, adversarially-safe decode; ACK hashes stay exact via an explicit length byte. Typical short-text ratio 1.2–1.4x (dictionary warm-up bound; LZSS is the v2 path).
 
+### Link-adaptive coding rate
+- DIRECT sends to a freshly-measured neighbour link pick the LoRa CR from the link's real SNR margin over the spreading factor's demod floor: weak (<6 dB) → CR 4/8, middling (6–12 dB) → CR 4/6, strong → the configured default. See `docs/adaptive-coding-rate.md`.
+- LoRa carries CR in the explicit PHY header of every packet, so **any receiver (stock nodes included) decodes it with zero protocol changes**; airtime estimates track the applied CR automatically, and RX-side header timeouts were already worst-cased to the highest CR.
+- Only zero-hop sends over a fresh measurement (adverts, messages, PEER_PATH receipts from that neighbour — 10 min window) qualify; floods and multi-hop directs always fly at the configured default, and an out-of-range or stale hint degrades to exactly today's behaviour.
+
 ### Frequency support
 - Repeat-mode whitelist accepts **910.250 MHz** (FCC 15.247(a)(2)-aligned community setting, issue #945) and **927.875 MHz** (SoCal alternative, issue #1798); documented in the FAQ.
 
@@ -155,7 +160,7 @@ There are a number of fairly major features in the pipeline, with no particular 
 - [ ] Core: round-trip manual path support
 - [ ] Companion + Apps: support for multiple sub-meshes (and 'off-grid' client repeat mode)
 - [X] Core + Apps: support for LZW message compression *(this fork: firmware-to-firmware, inside E2E encryption — see docs/lzw-compression.md)*
-- [ ] Core: dynamic CR (Coding Rate) for weak vs strong hops
+- [X] Core: dynamic CR (Coding Rate) for weak vs strong hops *(this fork: shipped for zero-hop DIRECT sends over freshly measured links — see docs/adaptive-coding-rate.md)*
 - [ ] Core: new framework for hosting multiple virtual nodes on one physical device
 - [ ] V2 protocol spec: discussion and consensus around V2 packet protocol, including path hashes, new encryption specs, etc
 

@@ -213,10 +213,6 @@ bool RadioLibWrapper::isChannelActive() {
 float RadioLibWrapper::getLastRSSI() const {
   return _radio->getRSSI();
 }
-float RadioLibWrapper::getLastSNR() const {
-  return _radio->getSNR();
-}
-
 // Approximate SNR threshold per SF for successful reception (based on Semtech datasheets)
 static float snr_threshold[] = {
     -7.5,  // SF7 needs at least -7.5 dB SNR
@@ -226,6 +222,16 @@ static float snr_threshold[] = {
     -17.5,// SF11 needs at least -17.5 dB SNR
     -20   // SF12 needs at least -20 dB SNR
 };
+
+float RadioLibWrapper::getLastSNR() const {
+  return _radio->getSNR();
+}
+
+float RadioLibWrapper::getDemodFloorSnr() const {
+  int sf = (int)getSpreadingFactor();
+  if (sf < 7 || sf > 12) return -20.0f;
+  return snr_threshold[sf - 7];
+}
 
 float RadioLibWrapper::packetScoreInt(float snr, int sf, int packet_len) {
   if (sf < 7) return 0.0f;

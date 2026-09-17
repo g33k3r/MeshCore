@@ -84,6 +84,7 @@ void RS232Bridge::loop() {
             BRIDGE_DEBUG_PRINTLN("RX, len=%d crc=0x%04x\n", len, received_checksum);
             mesh::Packet *pkt = _mgr->allocNew();
             if (pkt) {
+              pkt->tx_cr = 0;   // fork: clear recycled-packet adaptive-CR hint
               if (pkt->readFrom(_rx_buffer + 4, len)) {
                 onPacketReceived(pkt);
               } else {

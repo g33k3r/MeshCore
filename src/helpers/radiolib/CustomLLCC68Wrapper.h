@@ -13,12 +13,15 @@ public:
     ((CustomLLCC68 *)_radio)->setSpreadingFactor(sf);
     ((CustomLLCC68 *)_radio)->setBandwidth(bw);
     ((CustomLLCC68 *)_radio)->setCodingRate(cr);
+    _default_cr = cr;   // fork: remember configured default for adaptive CR
     updatePreamble(sf);
     PacketMillis pm = calcMaxPacketMillis(sf, bw, cr, preambleLengthForSF(sf));
     ((CustomLLCC68 *)_radio)->setPreambleMillis(pm.preambleMillis);
     ((CustomLLCC68 *)_radio)->setMaxPayloadMillis(pm.payloadMillis);
 
   }
+
+  void applyCodingRate(uint8_t cr) override { ((CustomLLCC68 *)_radio)->setCodingRate(cr); }   // fork
 
   bool isReceivingPacket() override { 
     return ((CustomLLCC68 *)_radio)->isReceiving();

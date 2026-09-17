@@ -13,11 +13,14 @@ public:
     ((CustomLR1110 *)_radio)->setSpreadingFactor(sf);
     ((CustomLR1110 *)_radio)->setBandwidth(bw);
     ((CustomLR1110 *)_radio)->setCodingRate(cr);
+    _default_cr = cr;   // fork: remember configured default for adaptive CR
     updatePreamble(sf);
     PacketMillis pm = calcMaxPacketMillis(sf, bw, cr, preambleLengthForSF(sf));
     ((CustomLR1110 *)_radio)->setPreambleMillis(pm.preambleMillis);
     ((CustomLR1110 *)_radio)->setMaxPayloadMillis(pm.payloadMillis);
   }
+
+  void applyCodingRate(uint8_t cr) override { ((CustomLR1110 *)_radio)->setCodingRate(cr); }   // fork
 
   bool isReceivingPacket() override {
     return ((CustomLR1110 *)_radio)->isReceiving();

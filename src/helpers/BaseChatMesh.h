@@ -130,6 +130,10 @@ protected:
   virtual void sendFloodScoped(const ContactInfo& recipient, mesh::Packet* pkt, uint32_t delay_millis=0);
   virtual void sendFloodScoped(const mesh::GroupChannel& channel, mesh::Packet* pkt, uint32_t delay_millis=0);
 
+  // fork: sendDirect to a contact's out_path with link-adaptive coding rate —
+  // weak measured neighbour links transmit with a more robust CR (helpers/CodingRatePolicy.h)
+  virtual void sendDirectContact(mesh::Packet* packet, const ContactInfo& dest, uint32_t delay_millis=0);
+
   // storage concepts, for sub-classes to override/implement
   virtual int  getBlobByKey(const uint8_t key[], int key_len, uint8_t dest_buf[]) { return 0; }  // not implemented
   virtual bool putBlobByKey(const uint8_t key[], int key_len, const uint8_t src_buf[], int len) { return false; }

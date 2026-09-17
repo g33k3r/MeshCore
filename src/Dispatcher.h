@@ -78,6 +78,17 @@ public:
 
   virtual float getLastRSSI() const { return 0; }
   virtual float getLastSNR() const { return 0; }
+
+  /**
+   * \brief  fork: set the coding rate for subsequent transmits. cr 0 restores the
+   *         configured default. No-op where unsupported.
+  */
+  virtual void setCodingRate(uint8_t cr) { }
+
+  /**
+   * \returns  fork: approximate demodulation floor (dB SNR) of the current SF.
+  */
+  virtual float getDemodFloorSnr() const { return -20.0f; }
 };
 
 /**

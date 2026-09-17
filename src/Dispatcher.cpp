@@ -326,6 +326,9 @@ void Dispatcher::checkSend() {
 
       uint32_t max_airtime = _radio->getEstAirtimeFor(len)*3/2;
       outbound_start = _ms->getMillis();
+      // fork: link-adaptive coding rate for this packet (0 = configured default).
+      // Applied here so every radio backend honors it at the last moment before TX.
+      _radio->setCodingRate(outbound->tx_cr);
       bool success = _radio->startSendRaw(raw, len);
       if (!success) {
         MESH_DEBUG_PRINTLN("%s Dispatcher::loop(): ERROR: send start failed!", getLogDateTime());
@@ -360,6 +363,7 @@ Packet* Dispatcher::obtainNewPacket() {
   } else {
     pkt->payload_len = pkt->path_len = 0;
     pkt->_snr = 0;
+    pkt->tx_cr = 0;
   }
   return pkt;
 }

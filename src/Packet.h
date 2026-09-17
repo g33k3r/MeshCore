@@ -52,6 +52,7 @@ public:
   uint8_t path[MAX_PATH_SIZE];
   uint8_t payload[MAX_PACKET_PAYLOAD];
   int8_t _snr;
+  uint8_t tx_cr;    // fork: link-adaptive coding rate for this DIRECT send (0 = radio default, else CR 5..8). RAM-only, never serialized.
 
   /**
    * \brief calculate the hash of payload + type
